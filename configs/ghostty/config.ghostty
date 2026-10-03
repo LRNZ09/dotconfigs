@@ -1,4 +1,3 @@
-macos-titlebar-style = tabs
 shell-integration = fish
 shell-integration-features = sudo,title,ssh-terminfo,ssh-env
 window-save-state = always
