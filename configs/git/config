@@ -87,14 +87,14 @@
 
 # Credentials and host rewrites
 [credential]
-	gitLabAuthModes = pat
-	helper =
-	helper = /usr/local/share/gcm-core/git-credential-manager
-	# credentialStore is OS-specific — see config-local
+	helper = cache --timeout 21600	# six hours
+	helper = osxkeychain
+	helper = oauth
+	# Must stay last: stored credentials are checked before a new browser login.
 
 # GitHub HTTPS auth via gh's token. `!gh` (not an absolute path) keeps this
 # portable — gh is on $PATH via Homebrew (macOS) and Linuxbrew. The empty
-# `helper` first clears the inherited GCM helper so gh wins for this host.
+# `helper` first clears the inherited keychain helper so gh wins for this host.
 [credential "https://github.com"]
 	helper =
 	helper = !gh auth git-credential
@@ -102,9 +102,6 @@
 [credential "https://gist.github.com"]
 	helper =
 	helper = !gh auth git-credential
-
-[credential "https://bitbucket.org"]
-	provider = bitbucket
 
 [url "https://bitbucket.org/"]
 	insteadOf = ssh://git@bitbucket.org/
