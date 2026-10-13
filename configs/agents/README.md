@@ -29,22 +29,38 @@ Everything else in `~/.agents` stays there and is not in this repo:
   prunes every skill. `git restore configs/agents/agents.toml`, then
   `npx @sentry/dotagents --user install`. `bin/doctor` reports the dangling
   link.
-- **`remove <skill>` does nothing against a multi-line `exclude`.** It prints
-  "Added … to exclude list" and leaves the file unchanged, so the next install
-  restores the skill. Both `getsentry/skills` and `anthropics/skills` use that
-  form here: edit the list by hand.
+- **There is no `include` key.** dotagents drops unknown `[[skills]]` keys
+  without a word, so `include = [...]` on a wildcard installs the whole source.
+  An include list is one block per skill, as for getsentry/skills and
+  anthropics/skills here.
+- **`add` can't write a getsentry/skills or anthropics/skills block**, `--all`
+  included. Both are plugin marketplaces, so `add` reads the skill name as a
+  plugin name and fails with `Plugin "<name>" not found`. Write the block by
+  hand with only `name` and `source`: `install` finds `skills/<name>` itself.
+- **A listed skill that upstream renames or deletes stops `install`.** It exits
+  1 before pruning or writing the lock, and plugins, MCP and hooks are skipped
+  with it. Fix or drop the block and run install again.
+- **`remove <skill>` takes more than its block.** It deletes the block, the
+  skill's folder and its lock entry without asking, and every line up to the
+  next header, which takes the comment above the next block. The comment above
+  the removed block stays behind. Reasons go inline on the `name` line for
+  that reason.
+- **A wildcard's `exclude` must stay on one line.** Against a multi-line array
+  `remove` prints "Added … to exclude list" and leaves the file unchanged
+  (getsentry/dotagents#205).
 - **`trust add` and `trust remove` rebuild the `github_orgs` line**, dropping
-  any comment on the same line. Removing a block leaves the comment above it
-  behind.
-- **`add getsentry/skills <skill>` fails**, because that source is a plugin
-  marketplace. Use the wildcard entry and its `exclude` list.
-- **Two wildcard sources that provide the same name stop `install`.** Add the
-  name to one source's `exclude`.
+  any comment on the same line.
+- **Only a wildcard-against-wildcard name clash is loud.** Two wildcards that
+  provide the same name stop `install`. An explicit block silently beats a
+  wildcard with the same name, and of two explicit blocks with one name the
+  later silently wins.
 
 ## Guard rails
 
 `[trust]` limits sources to four GitHub orgs. `minimum_release_age` holds every
-source's commits back seven days, except `LRNZ09/*`. The `dotagents` skill is
+source's commits back seven days, except `LRNZ09/*`. getsentry/skills and
+anthropics/skills are include lists, so a skill added upstream arrives only
+once it has its own block. The `dotagents` skill is
 pinned at 3.1.0, the same version as the CLI, which runs unpinned through
 `npx`.
 
