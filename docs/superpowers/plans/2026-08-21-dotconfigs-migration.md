@@ -1,306 +1,108 @@
 # dotconfigs Migration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use
-> checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rename `LRNZ09/dotgit` to `LRNZ09/dotconfigs`, restructure it into a
-browsable repo at `~/Developer/LRNZ09/dotconfigs` that also holds the fish and
-ghostty configuration, and activate it by pointing each tool's own default path
-at it with a symlink — without deleting anything, and without a human at the
-keyboard.
+**Goal:** Rename `LRNZ09/dotgit` to `LRNZ09/dotconfigs`, restructure it into a browsable repo at `~/Developer/LRNZ09/dotconfigs` that also holds the fish and ghostty configuration, and activate it by pointing each tool's own default path at it with a symlink — without deleting anything, and without a human at the keyboard.
 
-**Architecture:** One mechanism, not four. `~/.config/git` and `~/.config/fish`
-become symlinks into the clone, so each tool reads the repo at its own default
-path with zero configuration in its own language. Ghostty is the one exception —
-its winning path on macOS is under `~/Library/Application Support`, which no
-symlink under `~/.config` can outrank — so it gets a one-line `config-file`
-include instead. `bin/install` creates the links and never deletes: every
-displaced path is *moved* into a timestamped backup directory. `bin/doctor` is
-the read-only probe for the one invariant git cannot express — that the links
-still point here.
+**Architecture:** One mechanism, not four. `~/.config/git` and `~/.config/fish` become symlinks into the clone, so each tool reads the repo at its own default path with zero configuration in its own language. Ghostty is the one exception — its winning path on macOS is under `~/Library/Application Support`, which no symlink under `~/.config` can outrank — so it gets a one-line `config-file` include instead. `bin/install` creates the links and never deletes: every displaced path is *moved* into a timestamped backup directory. `bin/doctor` is the read-only probe for the one invariant git cannot express — that the links still point here.
 
-**Tech Stack:** POSIX `sh` (both scripts must pass `sh -n`), git 2.55.0, fish
-4.8.0 + fisher, ghostty 1.3.1, lefthook 2.1.10, gitleaks 8.30.1, `gh` 2.96.0
-for the rename and the CI gate.
+**Tech Stack:** POSIX `sh` (both scripts must pass `sh -n`), git 2.55.0, fish 4.8.0 + fisher, ghostty 1.3.1, lefthook 2.1.10, gitleaks 8.30.1, `gh` 2.96.0 for the rename and the CI gate.
 
-**Spec:** `docs/superpowers/specs/2026-08-21-dotconfigs-migration-design.md` —
-read it alongside this plan. Every "why" lives there; this plan argues from it
-and does not restate its measurements.
+**Spec:** `docs/superpowers/specs/2026-08-21-dotconfigs-migration-design.md` — read it alongside this plan. Every "why" lives there; this plan argues from it and does not restate its measurements.
 
 ## Running this unattended
 
-Every task in this plan is executable with nobody watching. Three things make
-that true, and each one is a change from the first draft:
+Every task in this plan is executable with nobody watching. Three things make that true, and each one is a change from the first draft:
 
-1. **No command waits on a human.** `bin/install`'s prompt is replaced by
-   declared resolutions (`--resolve`, `--expect-diff`) for Tasks 10 and 13; the
-   prompt itself stays, and is still what a person at a terminal gets. The
-   only other command that reads stdin is `fisher remove`, which does so
-   whenever stdin is not a TTY, so it gets `</dev/null`. No command can open
-   an editor: `GIT_EDITOR=false` makes an accidental invocation fail rather
-   than wait.
-2. **Every check is a command with an exit code.** The first draft had roughly
-   40 checks written as prose or as a trailing `# expected value` comment. An
-   unattended run cannot read those. They are now assertions.
-3. **Nothing is hand-carried between tasks.** Four values used to be "write
-   this down" (`BASELINE_COMMITS`, `$R`, `$BK`, `$SP`). They live in a state
-   file that every task sources.
+1. **No command waits on a human.** `bin/install`'s prompt is replaced by declared resolutions (`--resolve`, `--expect-diff`) for Tasks 10 and 13; the prompt itself stays, and is still what a person at a terminal gets. The only other command that reads stdin is `fisher remove`, which does so whenever stdin is not a TTY, so it gets `</dev/null`. No command can open an editor: `GIT_EDITOR=false` makes an accidental invocation fail rather than wait.
+2. **Every check is a command with an exit code.** The first draft had roughly 40 checks written as prose or as a trailing `# expected value` comment. An unattended run cannot read those. They are now assertions.
+3. **Nothing is hand-carried between tasks.** Four values used to be "write this down" (`BASELINE_COMMITS`, `$R`, `$BK`, `$SP`). They live in a state file that every task sources.
 
-The one place the run can stop and wait for a person is Task 13's review queue,
-and it stops *cleanly*: the machine is already activated and working, and only
-the push is outstanding. That is by design — the alternative is guessing which
-of two versions of a config file was right.
+The one place the run can stop and wait for a person is Task 13's review queue, and it stops *cleanly*: the machine is already activated and working, and only the push is outstanding. That is by design — the alternative is guessing which of two versions of a config file was right.
 
-**Before going AFK, Task 0 must pass.** It verifies the two things this plan
-cannot work around: that a signed commit completes without a passphrase prompt,
-and that `gh` is authenticated without one.
+**Before going AFK, Task 0 must pass.** It verifies the two things this plan cannot work around: that a signed commit completes without a passphrase prompt, and that `gh` is authenticated without one.
 
 ## Global Constraints
 
 Every task's requirements implicitly include this section.
 
-- **Repo name and remote:** `LRNZ09/dotconfigs`,
-  `https://github.com/LRNZ09/dotconfigs.git`. The rename happens before
-  anything is cloned, so no artifact ever carries the old name.
+- **Repo name and remote:** `LRNZ09/dotconfigs`, `https://github.com/LRNZ09/dotconfigs.git`. The rename happens before anything is cloned, so no artifact ever carries the old name.
 - **Clone path:** `~/Developer/LRNZ09/dotconfigs`, mode `700`.
-- **State file:** `~/Backups/dotconfigs-migration.env`. Tasks append `KEY=value`
-  lines to it and later tasks open with `. ~/Backups/dotconfigs-migration.env`.
-  Nothing in this plan is carried in a human's head or in a single shell.
-- **`chmod 700 ~/Backups`.** It holds the config tarball — every credential
-  under `~/.config` in the clear — and a sandbox containing copies of
-  `configs/git/config-local` and `configs/git/config-work`. It is mode `755`
-  today.
-- **Backups never go to `~/Desktop` or `~/Documents`** — both are iCloud-synced.
-  `~/Backups` only. The sandbox goes to `~/Backups/dotconfigs-sandbox`, never
-  `/tmp`: a world-readable sandbox would expose the identity files the fixture
-  copies.
-- **Nothing is ever deleted.** No `rm`, no `rm -rf`, in any task. Every
-  displaced path is moved — into the repo, or into a timestamped directory under
-  `~/Backups`. Two exceptions, both narrow: `git rm -r .githooks` in Task 4
-  removes *tracked* files that stay recoverable from history, and the sandbox
-  fixture builder wipes and rebuilds its own scratch directory under
-  `$SP` on every run.
+- **State file:** `~/Backups/dotconfigs-migration.env`. Tasks append `KEY=value` lines to it and later tasks open with `. ~/Backups/dotconfigs-migration.env`. Nothing in this plan is carried in a human's head or in a single shell.
+- **`chmod 700 ~/Backups`.** It holds the config tarball — every credential under `~/.config` in the clear — and a sandbox containing copies of `configs/git/config-local` and `configs/git/config-work`. It is mode `755` today.
+- **Backups never go to `~/Desktop` or `~/Documents`** — both are iCloud-synced. `~/Backups` only. The sandbox goes to `~/Backups/dotconfigs-sandbox`, never `/tmp`: a world-readable sandbox would expose the identity files the fixture copies.
+- **Nothing is ever deleted.** No `rm`, no `rm -rf`, in any task. Every displaced path is moved — into the repo, or into a timestamped directory under `~/Backups`. Two exceptions, both narrow: `git rm -r .githooks` in Task 4 removes *tracked* files that stay recoverable from history, and the sandbox fixture builder wipes and rebuilds its own scratch directory under `$SP` on every run.
 - **Environment for the whole run:**
 
   ```sh
   export GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 GIT_EDITOR=false
   ```
 
-  `GH_PROMPT_DISABLED` turns any overlooked interactive `gh` path into a fast
-  failure instead of a hang. `GIT_EDITOR=false` does the same for git: the
-  tracked config sets `core.editor = code --wait`, so a command that opens an
-  editor would otherwise block forever on a GUI window.
-- **Every commit passes `-m`.** Measured: with `commit.verbose = true` a `-m`
-  commit never invokes the editor, so the `-m` commits in this plan are safe.
-  There is no `git rebase -i`, no `git commit --amend` and no
-  `git config --edit` anywhere in it.
-- **Both scripts are POSIX `sh`** with `#!/bin/sh` and `set -eu`, and must pass
-  `sh -n`. `chmod` on macOS rejects a `--` separator; every other tool used here
-  accepts it. `read` has no portable timeout (`read -t` is not POSIX), which is
-  why the AFK path declares decisions rather than feeding the prompt.
-- **Executable bits must be set on disk, not only in the index.**
-  `git add --chmod=+x` records mode `100755` while leaving the working-tree file
-  at `644`, so `./bin/install` dies with exit 126. Always `chmod +x` then a
-  plain `git add`.
-- **Quote `%G?`.** `git log -1 --pretty=%G?` fails under zsh with
-  `no matches found` because `?` is a glob. Always
-  `git log -1 --pretty='%G?'`.
-- **`.gitignore`: no pattern may carry a trailing comment.** gitignore honours
-  `#` only at the start of a line, so `/configs/git/.remember/ # 11 entries` is
-  a pattern including the comment text and matches nothing.
-- **`.gitignore`: the directory re-includes must come *after*
-  `/configs/fish/*`.** Measured: hoisted above it, only 2 files stage instead of
-  6, silently dropping four `conf.d` files and `functions/gfu.fish`.
-- **The `includeIf` invariant:** `~/Developer/work` must be a real directory all
-  the way down, and work repos must physically live inside it. A symlink in the
-  *pattern* path, or a repo whose real path is outside it, never matches and
-  says nothing. Verified today: both components are real directories, and a
-  commit made inside `~/Developer/work` resolves the work identity and signs
-  with the work key.
-- **Never commit a non-noreply email address.** `.gitleaks.toml` flags every
-  email that is not `*@users.noreply.github.com`, the pre-commit hook enforces
-  it, and the workflow re-scans full history. This applies to this plan document
-  too — which is why the hook-proof step below builds its fake finding from a
-  split string.
-- **Plugin pins, exactly:** `jorgebucaran/fisher` unpinned (it is the installer,
-  kept current on purpose), `jhillyerd/plugin-git@v0.4` (upstream publishes
-  minor tags only), `halostatue/fish-macos@v7`,
-  `halostatue/fish-utils-core@v3` (both moving major ladders). No tag lookup is
-  needed at execution time.
-- **Counts that are gates:** 6 tracked files under `configs/git/`, 6 under
-  `configs/fish/`, 97 entries in the fish directory after Task 1, `abbr | count`
-  169, `functions | count` 108. The *total* tracked-file count is deliberately
-  not a gate — Task 7 grows it on purpose.
-- **`BASELINE_COMMITS`** is recorded in Task 3 and is the only history gate.
-  Never assert against a literal commit count: this document and the design
-  document both add commits.
-- **Verification through fish compares stdout.** `proto activate fish | source`
-  emits NDJSON in agent environments and produces ~20 lines of parse errors on
-  stderr per startup. This is proto's behaviour, is not fixable from this
-  config, and affects only agent-driven shells. Use `2>/dev/null` and read
-  stdout.
-- **`gh run list` cannot gate CI.** It exits 0 regardless of conclusion, and
-  exits 0 when it matches nothing at all. Use the SHA-scoped gate in Task 3,
-  and pass the full 40-character SHA — `--commit` with a short SHA silently
-  returns an empty list.
+  `GH_PROMPT_DISABLED` turns any overlooked interactive `gh` path into a fast failure instead of a hang. `GIT_EDITOR=false` does the same for git: the tracked config sets `core.editor = code --wait`, so a command that opens an editor would otherwise block forever on a GUI window.
+- **Every commit passes `-m`.** Measured: with `commit.verbose = true` a `-m` commit never invokes the editor, so the `-m` commits in this plan are safe. There is no `git rebase -i`, no `git commit --amend` and no `git config --edit` anywhere in it.
+- **Both scripts are POSIX `sh`** with `#!/bin/sh` and `set -eu`, and must pass `sh -n`. `chmod` on macOS rejects a `--` separator; every other tool used here accepts it. `read` has no portable timeout (`read -t` is not POSIX), which is why the AFK path declares decisions rather than feeding the prompt.
+- **Executable bits must be set on disk, not only in the index.** `git add --chmod=+x` records mode `100755` while leaving the working-tree file at `644`, so `./bin/install` dies with exit 126. Always `chmod +x` then a plain `git add`.
+- **Quote `%G?`.** `git log -1 --pretty=%G?` fails under zsh with `no matches found` because `?` is a glob. Always `git log -1 --pretty='%G?'`.
+- **`.gitignore`: no pattern may carry a trailing comment.** gitignore honours `#` only at the start of a line, so `/configs/git/.remember/ # 11 entries` is a pattern including the comment text and matches nothing.
+- **`.gitignore`: the directory re-includes must come *after* `/configs/fish/*`.** Measured: hoisted above it, only 2 files stage instead of 6, silently dropping four `conf.d` files and `functions/gfu.fish`.
+- **The `includeIf` invariant:** `~/Developer/work` must be a real directory all the way down, and work repos must physically live inside it. A symlink in the *pattern* path, or a repo whose real path is outside it, never matches and says nothing. Verified today: both components are real directories, and a commit made inside `~/Developer/work` resolves the work identity and signs with the work key.
+- **Never commit a non-noreply email address.** `.gitleaks.toml` flags every email that is not `*@users.noreply.github.com`, the pre-commit hook enforces it, and the workflow re-scans full history. This applies to this plan document too — which is why the hook-proof step below builds its fake finding from a split string.
+- **Plugin pins, exactly:** `jorgebucaran/fisher` unpinned (it is the installer, kept current on purpose), `jhillyerd/plugin-git@v0.4` (upstream publishes minor tags only), `halostatue/fish-macos@v7`, `halostatue/fish-utils-core@v3` (both moving major ladders). No tag lookup is needed at execution time.
+- **Counts that are gates:** 6 tracked files under `configs/git/`, 6 under `configs/fish/`, 97 entries in the fish directory after Task 1, `abbr | count` 169, `functions | count` 108. The *total* tracked-file count is deliberately not a gate — Task 7 grows it on purpose.
+- **`BASELINE_COMMITS`** is recorded in Task 3 and is the only history gate. Never assert against a literal commit count: this document and the design document both add commits.
+- **Verification through fish compares stdout.** `proto activate fish | source` emits NDJSON in agent environments and produces ~20 lines of parse errors on stderr per startup. This is proto's behaviour, is not fixable from this config, and affects only agent-driven shells. Use `2>/dev/null` and read stdout.
+- **`gh run list` cannot gate CI.** It exits 0 regardless of conclusion, and exits 0 when it matches nothing at all. Use the SHA-scoped gate in Task 3, and pass the full 40-character SHA — `--commit` with a short SHA silently returns an empty list.
 
 ## Execution order, and the one gate
 
-- Tasks 0–3 (Phase 0) change this machine, and every one of them is worth doing
-  whether or not the migration proceeds.
-- Tasks 4–9 (Phase 1) happen entirely inside a fresh clone. `~/.config` is
-  untouched. `~/.config/git` stays a complete, working, pushed checkout, which
-  is what makes it the rollback.
-- **Tasks 8–11 are the gate.** The two scripts ship with a sandbox harness that
-  runs them against a redirected `XDG_CONFIG_HOME`, and Task 10 rehearses the
-  real merge path against real drift. **No step in Task 12 or later may start
-  until Task 11 passes.**
-- Tasks 12–14 (Phases 3–4) are the only ones that change the *shape* of
-  `~/.config` — the links, the stub, the displaced checkout. Tasks 1–3 edit
-  files in place, and each of those edits stands on its own merit.
+- Tasks 0–3 (Phase 0) change this machine, and every one of them is worth doing whether or not the migration proceeds.
+- Tasks 4–9 (Phase 1) happen entirely inside a fresh clone. `~/.config` is untouched. `~/.config/git` stays a complete, working, pushed checkout, which is what makes it the rollback.
+- **Tasks 8–11 are the gate.** The two scripts ship with a sandbox harness that runs them against a redirected `XDG_CONFIG_HOME`, and Task 10 rehearses the real merge path against real drift. **No step in Task 12 or later may start until Task 11 passes.**
+- Tasks 12–14 (Phases 3–4) are the only ones that change the *shape* of `~/.config` — the links, the stub, the displaced checkout. Tasks 1–3 edit files in place, and each of those edits stands on its own merit.
 
 ## Corrections this plan makes to the spec's prose
 
-The design document warns that prose in it has a measured failure rate. Writing
-the two scripts, testing them against a sandbox, and converting the plan for an
-unattended run turned up fourteen, and an adversarial review of the finished
-plan found ten more — every one of those ten a defect this plan introduced
-rather than inherited, and every one a way the unattended run could have failed
-silently. Each is fixed in the task that owns it;
-they are collected here so a reviewer can see them at once.
+The design document warns that prose in it has a measured failure rate. Writing the two scripts, testing them against a sandbox, and converting the plan for an unattended run turned up fourteen, and an adversarial review of the finished plan found ten more — every one of those ten a defect this plan introduced rather than inherited, and every one a way the unattended run could have failed silently. Each is fixed in the task that owns it; they are collected here so a reviewer can see them at once.
 
-1. **`chmod` rejects `--`.** `chmod 700 -- "$repo"` fails with
-   `chmod: --: No such file or directory` on macOS. Use `chmod 700 "$repo"`.
-   (`mv`, `cp`, `ln`, `cat`, `cmp`, `mkdir`, `readlink` all accept it.)
-2. **`lefthook install` resolves its config from the caller's CWD, not the
-   repo.** Measured: run from an unrelated git repo it *creates* a
-   `lefthook.yml` there, installs hooks into that repo, exits 0 — and
-   `bin/install` then prints a success line naming the dotconfigs clone, which
-   is false. Run from outside any repo it exits 128, which with `set -eu` and
-   `>/dev/null` kills the script silently *after* the links are made. Both are
-   fixed by running it in a subshell that cds to the repo, and by reporting the
-   failure. This matters most for `sancus`, which will not have cd'd anywhere.
-3. **`bin/doctor` must strip `@pin` on both sides of the declared-vs-installed
-   check.** Task 7 pins `jhillyerd/plugin-git@v0.4`, while fisher's
-   `_fisher_plugins` records the plugin without a pin until `fisher update`
-   runs. A literal comparison reports "declared but not installed: 1" forever.
-4. **`bin/doctor` must skip the fish checks when the fish link is not intact.**
-   Measured: fish **creates** `$XDG_CONFIG_HOME/fish` when it is missing. A
-   read-only probe that starts fish through a severed link therefore plants a
-   real directory where the link belongs — which turns install's silent
-   relink into a prompt on the next run. Found by a test doing exactly that.
-5. **`fish --no-config` does not expose universal variables**, so doctor cannot
-   use it to avoid conf.d noise; it starts a normal fish and sends stderr to
-   `/dev/null`. Measured separately: reading a universal variable leaves
-   `fish_variables` untouched, so doctor stays read-only.
-6. **The sandbox must not live in `/tmp`.** The fixture copies `~/.config/git`
-   wholesale, which includes `config-local`, `config-work` and the mode-700
-   `.remember/`. `${TMPDIR:-/tmp}` is safe on macOS and world-readable on the
-   fallback. Use `~/Backups/dotconfigs-sandbox` with mode 700.
-7. **`gh repo rename` prompts without `--yes`**, and the plan's next line
-   repointed `origin` unconditionally — so a failed rename plus a successful
-   `set-url` would leave `origin` naming a repo that does not exist, surfacing
-   only at the push. Fixed with `--yes` and `&&`.
-8. **`gh run list -L 3` cannot gate CI.** Measured: exit 0 with months-old
-   successful runs, and exit 0 with an empty result. The plan's "do not go on if
-   it failed" was unenforceable. Replaced with a SHA-scoped wait whose exit code
-   comes from `grep`.
-9. **Task 12 recomputed `$(date +%F)` three times.** A run that crosses midnight
-   writes one filename and verifies a different, nonexistent one — and
-   `tar tzf` on a missing file reads like archive corruption. One `ARCHIVE`
-   variable, recorded in the state file.
-10. **`grep -c excludesfile` exits 1 exactly when the edit was correct.** Three
-    other checks were also expected to exit non-zero. All four are now positive
-    assertions.
-11. **`mv "$CFG/git/.remember" "$repo/configs/git/"` fails on a re-run** with
-    `Directory not empty`, because the destination already exists from the first
-    attempt. Found by running Task 13 twice in the sandbox. Task 13 now gates on
-    the three destinations being absent, so a re-run refuses instead of failing
-    halfway.
+1. **`chmod` rejects `--`.** `chmod 700 -- "$repo"` fails with `chmod: --: No such file or directory` on macOS. Use `chmod 700 "$repo"`. (`mv`, `cp`, `ln`, `cat`, `cmp`, `mkdir`, `readlink` all accept it.)
+2. **`lefthook install` resolves its config from the caller's CWD, not the repo.** Measured: run from an unrelated git repo it *creates* a `lefthook.yml` there, installs hooks into that repo, exits 0 — and `bin/install` then prints a success line naming the dotconfigs clone, which is false. Run from outside any repo it exits 128, which with `set -eu` and `>/dev/null` kills the script silently *after* the links are made. Both are fixed by running it in a subshell that cds to the repo, and by reporting the failure. This matters most for `sancus`, which will not have cd'd anywhere.
+3. **`bin/doctor` must strip `@pin` on both sides of the declared-vs-installed check.** Task 7 pins `jhillyerd/plugin-git@v0.4`, while fisher's `_fisher_plugins` records the plugin without a pin until `fisher update` runs. A literal comparison reports "declared but not installed: 1" forever.
+4. **`bin/doctor` must skip the fish checks when the fish link is not intact.** Measured: fish **creates** `$XDG_CONFIG_HOME/fish` when it is missing. A read-only probe that starts fish through a severed link therefore plants a real directory where the link belongs — which turns install's silent relink into a prompt on the next run. Found by a test doing exactly that.
+5. **`fish --no-config` does not expose universal variables**, so doctor cannot use it to avoid conf.d noise; it starts a normal fish and sends stderr to `/dev/null`. Measured separately: reading a universal variable leaves `fish_variables` untouched, so doctor stays read-only.
+6. **The sandbox must not live in `/tmp`.** The fixture copies `~/.config/git` wholesale, which includes `config-local`, `config-work` and the mode-700 `.remember/`. `${TMPDIR:-/tmp}` is safe on macOS and world-readable on the fallback. Use `~/Backups/dotconfigs-sandbox` with mode 700.
+7. **`gh repo rename` prompts without `--yes`**, and the plan's next line repointed `origin` unconditionally — so a failed rename plus a successful `set-url` would leave `origin` naming a repo that does not exist, surfacing only at the push. Fixed with `--yes` and `&&`.
+8. **`gh run list -L 3` cannot gate CI.** Measured: exit 0 with months-old successful runs, and exit 0 with an empty result. The plan's "do not go on if it failed" was unenforceable. Replaced with a SHA-scoped wait whose exit code comes from `grep`.
+9. **Task 12 recomputed `$(date +%F)` three times.** A run that crosses midnight writes one filename and verifies a different, nonexistent one — and `tar tzf` on a missing file reads like archive corruption. One `ARCHIVE` variable, recorded in the state file.
+10. **`grep -c excludesfile` exits 1 exactly when the edit was correct.** Three other checks were also expected to exit non-zero. All four are now positive assertions.
+11. **`mv "$CFG/git/.remember" "$repo/configs/git/"` fails on a re-run** with `Directory not empty`, because the destination already exists from the first attempt. Found by running Task 13 twice in the sandbox. Task 13 now gates on the three destinations being absent, so a re-run refuses instead of failing halfway.
 12. **`--pretty=%G?` must be quoted** or zsh globs it.
-13. **The spec's Phase 4 signing check mixes fish syntax into an `sh` block** —
-    `( cd (mktemp -d) && ... )`. Use `cd "$(mktemp -d)"`.
-14. **The tracked count is 13, not 14.** The spec's "14 files — 7 fish, 6 git,
-    1 ghostty" predates Task 1 removing `conf.d/abbr_tips_override.fish`. After
-    it, the count is 6 fish + 6 git + 1 ghostty.
+13. **The spec's Phase 4 signing check mixes fish syntax into an `sh` block** — `( cd (mktemp -d) && ... )`. Use `cd "$(mktemp -d)"`.
+14. **The tracked count is 13, not 14.** The spec's "14 files — 7 fish, 6 git, 1 ghostty" predates Task 1 removing `conf.d/abbr_tips_override.fish`. After it, the count is 6 fish + 6 git + 1 ghostty.
 
-15. **A `!`-negated assertion cannot fail its step.** POSIX exempts a pipeline
-    beginning with `!` from `set -e`, so `! git ls-files | grep -qE '…'` — the
-    gate annotated "the one that matters", and the only guard against pushing a
-    tracked `configs/git/config-local` to a public repo — never aborted
-    anything. Measured: `sh -c 'set -e; ! true | grep -q x; echo REACHED'`
-    prints REACHED. Every negated assertion is now an `if … then echo FAIL; exit
-    1; fi`, which also names the offending path.
-16. **`! grep -q PAT FILE` passes when FILE does not exist** (grep exits 2, `!`
-    inverts it). Each such assertion is now preceded by `test -f FILE`.
-17. **Piping a script through `tee` discards its exit status.** Both Task 10 and
-    Task 13 drove their scripts that way, so `50 passed, 0 failed` and `38
-    passed, 12 failed` were indistinguishable — the rehearsal gate could pass
-    with the merge path broken. Measured: `sh -c "exit 7" | tee /dev/null` gives
-    a pipeline status of 0.
-18. **Thirteen fenced blocks issued git commands with no `cd`.** Sourcing the
-    state file per block concedes that each block is its own shell; the `cd` was
-    only in each task's *first* block. The runner's default directory is
-    `~/.config/git` — the old checkout, holding the same filenames — so Task 4's
-    `git mv config … configs/git/` would have restructured the live global
-    config and then passed its own assertions. Every such block now sources and
-    cds.
-19. **`fisher remove` reads stdin when stdin is not a TTY.** Its own code opens
-    with `isatty || read --local --null --array stdin`, so on an idle pipe the
-    first mutating command of the whole migration blocks forever. Now
-    `</dev/null`, and guarded so a repeat run is a no-op.
-20. **The `--expect-diff` digest hashed file names only.** A `differ:` line is
-    the same string whatever the file holds, so the documented guarantee — the
-    digest goes stale the moment the machine drifts — was false for an edit to a
-    file that already differed. The listing now carries both content hashes.
-21. **`merge` was accepted for the git path**, by flag and by prompt, and would
-    have copied the old checkout's `.git` into the repo as a nested repository
-    `git status` never reports — the outcome this plan calls forbidden while
-    nothing enforced it.
-22. **`git log --diff-filter=R --name-status -1 -- configs/git/config` prints
-    nothing** on a *correct* migration: the pathspec filters out the rename's
-    source side before detection runs. The assertion would have halted Task 4 on
-    a repo in exactly the right state. Fixed with `--follow`.
-23. **`test -z "$(git log --oneline @{u}..)"` passes when there is no upstream
-    at all** — git exits 128 and writes nothing to stdout. The line that was
-    supposed to prove the satellite is not ahead is now preceded by an upstream
-    assertion.
-24. **The rollback's guard was not fatal.** `test -d "$BK/git" && test -d
-    "$BK/fish"` with no `|| exit` let the block continue and move the live
-    `~/.config/git` and `~/.config/fish` aside before failing to restore
-    anything. It is now `|| { echo …; exit 1; }`, with `: "${BK:?}"` above it.
+15. **A `!`-negated assertion cannot fail its step.** POSIX exempts a pipeline beginning with `!` from `set -e`, so `! git ls-files | grep -qE '…'` — the gate annotated "the one that matters", and the only guard against pushing a tracked `configs/git/config-local` to a public repo — never aborted anything. Measured: `sh -c 'set -e; ! true | grep -q x; echo REACHED'` prints REACHED. Every negated assertion is now an `if … then echo FAIL; exit 1; fi`, which also names the offending path.
+16. **`! grep -q PAT FILE` passes when FILE does not exist** (grep exits 2, `!` inverts it). Each such assertion is now preceded by `test -f FILE`.
+17. **Piping a script through `tee` discards its exit status.** Both Task 10 and Task 13 drove their scripts that way, so `50 passed, 0 failed` and `38 passed, 12 failed` were indistinguishable — the rehearsal gate could pass with the merge path broken. Measured: `sh -c "exit 7" | tee /dev/null` gives a pipeline status of 0.
+18. **Thirteen fenced blocks issued git commands with no `cd`.** Sourcing the state file per block concedes that each block is its own shell; the `cd` was only in each task's *first* block. The runner's default directory is `~/.config/git` — the old checkout, holding the same filenames — so Task 4's `git mv config … configs/git/` would have restructured the live global config and then passed its own assertions. Every such block now sources and cds.
+19. **`fisher remove` reads stdin when stdin is not a TTY.** Its own code opens with `isatty || read --local --null --array stdin`, so on an idle pipe the first mutating command of the whole migration blocks forever. Now `</dev/null`, and guarded so a repeat run is a no-op.
+20. **The `--expect-diff` digest hashed file names only.** A `differ:` line is the same string whatever the file holds, so the documented guarantee — the digest goes stale the moment the machine drifts — was false for an edit to a file that already differed. The listing now carries both content hashes.
+21. **`merge` was accepted for the git path**, by flag and by prompt, and would have copied the old checkout's `.git` into the repo as a nested repository `git status` never reports — the outcome this plan calls forbidden while nothing enforced it.
+22. **`git log --diff-filter=R --name-status -1 -- configs/git/config` prints nothing** on a *correct* migration: the pathspec filters out the rename's source side before detection runs. The assertion would have halted Task 4 on a repo in exactly the right state. Fixed with `--follow`.
+23. **`test -z "$(git log --oneline @{u}..)"` passes when there is no upstream at all** — git exits 128 and writes nothing to stdout. The line that was supposed to prove the satellite is not ahead is now preceded by an upstream assertion.
+24. **The rollback's guard was not fatal.** `test -d "$BK/git" && test -d "$BK/fish"` with no `|| exit` let the block continue and move the live `~/.config/git` and `~/.config/fish` aside before failing to restore anything. It is now `|| { echo …; exit 1; }`, with `: "${BK:?}"` above it.
 
 Two clarifications that are not corrections, but matter when asserting:
 
-- **Case 1 reports rather than staying mute.** The spec's case list says
-  "already the correct link → nothing, silently", while its own rehearsal
-  asserts a second run "reports the links already correct". Resolved as: print
-  one `✓ ok` line per path, change nothing. "Silently" means no prompt and no
-  diff.
-- **The diff's own header names `.git/`** ("(.git/ and ignored files
-  excluded)"), so an assertion that the listing excluded `.git/` must match the
-  listing lines, not the whole log.
+- **Case 1 reports rather than staying mute.** The spec's case list says "already the correct link → nothing, silently", while its own rehearsal asserts a second run "reports the links already correct". Resolved as: print one `✓ ok` line per path, change nothing. "Silently" means no prompt and no diff.
+- **The diff's own header names `.git/`** ("(.git/ and ignored files excluded)"), so an assertion that the listing excluded `.git/` must match the listing lines, not the whole log.
 
 ### What was changed in the spec, and why
 
-Two edits to the design document were required before this plan could be
-faithful to it, and both are already applied:
+Two edits to the design document were required before this plan could be faithful to it, and both are already applied:
 
-- **Case 5 now reads "No TTY, or `--non-interactive`, for case 4, and no
-  resolution declared for that path → refuse and print, always."** The word
-  "always" was load-bearing, so the exception is stated in the spec rather than
-  argued for in a plan.
-- **A new subsection, "Declaring a resolution instead of typing one"**, records
-  what `--resolve` and `--expect-diff` do, why they do not weaken case 5 (they
-  never prompt, and an undeclared path still refuses), and why a provisioner
-  cannot use them durably (the digest goes stale the moment the machine drifts).
+- **Case 5 now reads "No TTY, or `--non-interactive`, for case 4, and no resolution declared for that path → refuse and print, always."** The word "always" was load-bearing, so the exception is stated in the spec rather than argued for in a plan.
+- **A new subsection, "Declaring a resolution instead of typing one"**, records what `--resolve` and `--expect-diff` do, why they do not weaken case 5 (they never prompt, and an undeclared path still refuses), and why a provisioner cannot use them durably (the digest goes stale the moment the machine drifts).
 
-`.markdownlint.jsonc` was also added to the repo and to the spec's layout tree.
-Prose in all three documents now wraps at 80 columns; the config exempts only
-fenced code blocks and table rows, both of which cannot be reflowed without
-damaging them. A prose hard tab or a long prose line is still an error.
+`.markdownlint.jsonc` was also added to the repo and to the spec's layout tree. Prose in all three documents now wraps at 80 columns; the config exempts only fenced code blocks and table rows, both of which cannot be reflowed without damaging them. A prose hard tab or a long prose line is still an error.
 
 ## File Structure
 
@@ -335,27 +137,15 @@ damaging them. A prose hard tab or a long prose line is still an error.
     └── ghostty/config.ghostty       Task 7 — four settings + one optional include
 ```
 
-Files that change together live together: everything git reads is under
-`configs/git/`, everything fish reads is under `configs/fish/`. The two scripts
-stay separate because a reviewer can reject one while approving the other, and
-because `bin/doctor` must stay defensibly read-only — it shares a three-line
-`find` idiom with `bin/install` rather than a library, since the spec's layout
-has no room for one.
+Files that change together live together: everything git reads is under `configs/git/`, everything fish reads is under `configs/fish/`. The two scripts stay separate because a reviewer can reject one while approving the other, and because `bin/doctor` must stay defensibly read-only — it shares a three-line `find` idiom with `bin/install` rather than a library, since the spec's layout has no room for one.
 
-Five scratch files live under `$SP/work` and are **deliberately not committed**:
-`mkfixture.sh`, `tests-install.sh`, `tests-doctor.sh`, `rehearse.sh` and
-`activate.sh`. The spec fixes the repo layout, and adding a `tests/` directory
-is not a decision this plan gets to make. They are rebuilt from this document
-when needed.
+Five scratch files live under `$SP/work` and are **deliberately not committed**: `mkfixture.sh`, `tests-install.sh`, `tests-doctor.sh`, `rehearse.sh` and `activate.sh`. The spec fixes the repo layout, and adding a `tests/` directory is not a decision this plan gets to make. They are rebuilt from this document when needed.
 
 ---
 
 ### Task 0: The unattended-run preflight
 
-Nothing in this plan can work around a passphrase prompt or an expired token,
-so both are verified before anything changes. This task also creates the state
-file every later task sources, and hardens the directory that is about to hold
-every credential on this machine in the clear.
+Nothing in this plan can work around a passphrase prompt or an expired token, so both are verified before anything changes. This task also creates the state file every later task sources, and hardens the directory that is about to hold every credential on this machine in the clear.
 
 **Files:**
 
@@ -365,10 +155,7 @@ every credential on this machine in the clear.
 **Interfaces:**
 
 - Consumes: nothing.
-- Produces: `~/Backups/dotconfigs-migration.env`, which exports
-  `GH_PROMPT_DISABLED`, `GH_NO_UPDATE_NOTIFIER` and `GIT_EDITOR`, defines `SP`
-  and `CLONE`, and defines the shell function `ci_green <sha>`. Every later task
-  opens with `. ~/Backups/dotconfigs-migration.env`.
+- Produces: `~/Backups/dotconfigs-migration.env`, which exports `GH_PROMPT_DISABLED`, `GH_NO_UPDATE_NOTIFIER` and `GIT_EDITOR`, defines `SP` and `CLONE`, and defines the shell function `ci_green <sha>`. Every later task opens with `. ~/Backups/dotconfigs-migration.env`.
 
 - [ ] **Step 1: Create and harden the working directories**
 
@@ -380,9 +167,7 @@ mkdir -p ~/Backups/dotconfigs-sandbox/work
 chmod 700 ~/Backups/dotconfigs-sandbox
 ```
 
-`~/Backups` is mode `755` today and is about to hold the `~/.config` tarball —
-all 32 credentials across seven stores — plus a sandbox holding copies of
-`configs/git/config-local` and `configs/git/config-work`.
+`~/Backups` is mode `755` today and is about to hold the `~/.config` tarball — all 32 credentials across seven stores — plus a sandbox holding copies of `configs/git/config-local` and `configs/git/config-work`.
 
 - [ ] **Step 2: Write the state file**
 
@@ -440,9 +225,7 @@ EOF
 test "$GIT_EDITOR" = false && test -n "$SP" && test -n "$CLONE"
 ```
 
-`ci_green` polls with `sleep`. If the harness running this plan blocks
-foreground sleeps, run the step that calls it as a background command rather
-than rewriting the gate.
+`ci_green` polls with `sleep`. If the harness running this plan blocks foreground sleeps, run the step that calls it as a background command rather than rewriting the gate.
 
 - [ ] **Step 3: Assert the toolchain is present**
 
@@ -454,8 +237,7 @@ git --version | grep -q 'version 2\.'
 fish --version | grep -q 'version 4\.'
 ```
 
-- [ ] **Step 4: Assert the machine is in the state this plan was written
-      against**
+- [ ] **Step 4: Assert the machine is in the state this plan was written against**
 
 ```sh
 cd ~/.config/git
@@ -471,16 +253,11 @@ test "$(find ~/.config/fish ! -type d | wc -l | tr -d ' ')" -eq 104
 test "$(wc -l < ~/.config/fish/fish_plugins | tr -d ' ')" -eq 6
 ```
 
-Every one of these must pass, and they are also what tells a resumed run where
-it is: if the remote already says `dotconfigs`, Task 3 has run and this step
-should be skipped rather than fixed. If `abbr | count` is not 169 or the entry
-count is not 104, Task 1 has already run. Task 1 and Task 3 each refuse cleanly
-on their own preconditions when repeated, so a retry cannot half-apply them.
+Every one of these must pass, and they are also what tells a resumed run where it is: if the remote already says `dotconfigs`, Task 3 has run and this step should be skipped rather than fixed. If `abbr | count` is not 169 or the entry count is not 104, Task 1 has already run. Task 1 and Task 3 each refuse cleanly on their own preconditions when repeated, so a retry cannot half-apply them.
 
 - [ ] **Step 5: Verify a signed commit completes with no prompt**
 
-This is the check the whole unattended run rests on. It signs for real, in a
-throwaway repo, and asserts the signature came out good:
+This is the check the whole unattended run rests on. It signs for real, in a throwaway repo, and asserts the signature came out good:
 
 ```sh
 D=$(mktemp -d)
@@ -490,17 +267,11 @@ D=$(mktemp -d)
 	&& echo 'personal signing ok' ) || { echo 'FAIL: personal signing'; exit 1; }
 ```
 
-Measured on this machine: it completes in under a second with no dialog, because
-the passphrase lives in the macOS keychain and `pinentry-mac` reads it silently.
-If this hangs on a dialog, **stop** — sign one commit by hand to prime the
-agent, then re-run. Do not change `~/.gnupg/gpg-agent.conf`: raising the cache
-TTLs or presetting the passphrase would weaken this machine's credential
-handling to buy something the keychain already provides.
+Measured on this machine: it completes in under a second with no dialog, because the passphrase lives in the macOS keychain and `pinentry-mac` reads it silently. If this hangs on a dialog, **stop** — sign one commit by hand to prime the agent, then re-run. Do not change `~/.gnupg/gpg-agent.conf`: raising the cache TTLs or presetting the passphrase would weaken this machine's credential handling to buy something the keychain already provides.
 
 - [ ] **Step 6: Verify the work identity signs too**
 
-Task 14 asserts this, and it needs a repo *physically* inside
-`~/Developer/work`:
+Task 14 asserts this, and it needs a repo *physically* inside `~/Developer/work`:
 
 ```sh
 W=$(mktemp -d ~/Developer/work/dotconfigs-verify-XXXX)
@@ -524,10 +295,7 @@ gh repo view LRNZ09/dotgit --json viewerCanAdminister --jq .viewerCanAdminister 
 ghostty +validate-config >/dev/null 2>&1
 ```
 
-`viewerCanAdminister` is what the rename in Task 3 needs. `ghostty
-+validate-config` is measured to exit promptly with no window in a non-TTY
-shell, which matters because `bin/doctor` calls it and `sancus` calls
-`bin/doctor`.
+`viewerCanAdminister` is what the rename in Task 3 needs. `ghostty +validate-config` is measured to exit promptly with no window in a non-TTY shell, which matters because `bin/doctor` calls it and `sancus` calls `bin/doctor`.
 
 - [ ] **Step 8: No commit**
 
@@ -537,25 +305,18 @@ Nothing here touches the repo.
 
 ### Task 1: Phase 0 — drop two fish plugins and the dead override
 
-Two plugins come out before anything is copied, because Task 7 captures whatever
-the fish directory looks like at that moment. This is a change to the machine's
-configuration that the migration then records, not part of the migration
-mechanism.
+Two plugins come out before anything is copied, because Task 7 captures whatever the fish directory looks like at that moment. This is a change to the machine's configuration that the migration then records, not part of the migration mechanism.
 
 **Files:**
 
 - Modify: `~/.config/fish/fish_plugins` (via `fisher remove`; untracked today)
 - Move: `~/.config/fish/conf.d/abbr_tips_override.fish` → `~/Backups/`
-- Removed by fisher: 5 files for `gazorby/fish-abbreviation-tips`, 1 for
-  `2m/fish-history-merge`
+- Removed by fisher: 5 files for `gazorby/fish-abbreviation-tips`, 1 for `2m/fish-history-merge`
 
 **Interfaces:**
 
 - Consumes: Task 0's assertions about the starting state.
-- Produces: a fish directory of **97 entries** with a 4-line `fish_plugins`,
-  `abbr | count` 169 and `functions | count` 108. Task 7 copies exactly this
-  tree; Task 9's doctor arithmetic (82 fisher + 6 tracked + 5 generated + 3
-  OrbStack + `fish_variables` = 97) depends on it.
+- Produces: a fish directory of **97 entries** with a 4-line `fish_plugins`, `abbr | count` 169 and `functions | count` 108. Task 7 copies exactly this tree; Task 9's doctor arithmetic (82 fisher + 6 tracked + 5 generated + 3 OrbStack + `fish_variables` = 97) depends on it.
 
 - [ ] **Step 1: Remove the two plugins**
 
@@ -571,12 +332,7 @@ else
 fi
 ```
 
-`gazorby/fish-abbreviation-tips` mirrored every abbreviation into two universal
-**exported** arrays — 5,301 bytes of environment in every child process, and the
-mechanism behind the CESU-8 crash that broke React Native builds. Its
-`abbr_tips_uninstall` event erases every variable it set and restores the three
-key bindings, so this reclaims everything. `2m/fish-history-merge` was one file:
-a 2020 copy of `up-or-search`, which fish 4.8 provides as an embedded function.
+`gazorby/fish-abbreviation-tips` mirrored every abbreviation into two universal **exported** arrays — 5,301 bytes of environment in every child process, and the mechanism behind the CESU-8 crash that broke React Native builds. Its `abbr_tips_uninstall` event erases every variable it set and restores the three key bindings, so this reclaims everything. `2m/fish-history-merge` was one file: a 2020 copy of `up-or-search`, which fish 4.8 provides as an embedded function.
 
 - [ ] **Step 2: Move the now-dead override aside**
 
@@ -588,8 +344,7 @@ test -e ~/.config/fish/conf.d/abbr_tips_override.fish \
 test -f ~/Backups/abbr_tips_override.fish
 ```
 
-That file exists only to patch the plugin that just left. It is moved, not
-deleted.
+That file exists only to patch the plugin that just left. It is moved, not deleted.
 
 - [ ] **Step 3: Assert the numbers moved exactly as expected**
 
@@ -604,31 +359,19 @@ test "$(fish -c 'set --names | string match "*ABBR_TIPS*" | count' 2>/dev/null)"
 test "$(fish -c 'set --names | string match "_fisher_*_files" | count' 2>/dev/null)" -eq 4
 ```
 
-`! -type d` rather than `-type f`: three of those entries are OrbStack
-completion symlinks into `/Applications/OrbStack.app`, and `-type f` misses all
-three. `abbr | count` staying at 169 is the load-bearing one — all 169 come from
-`plugin-git`, so a change there means something other than the two intended
-plugins was removed. `functions | count` drops by exactly one, because fish's
-embedded `up-or-search` takes over from the 2020 copy.
+`! -type d` rather than `-type f`: three of those entries are OrbStack completion symlinks into `/Applications/OrbStack.app`, and `-type f` misses all three. `abbr | count` staying at 169 is the load-bearing one — all 169 come from `plugin-git`, so a change there means something other than the two intended plugins was removed. `functions | count` drops by exactly one, because fish's embedded `up-or-search` takes over from the 2020 copy.
 
 - [ ] **Step 4: No commit**
 
-Nothing here is tracked yet: `~/.config/fish` is a plain directory and
-`fish_plugins` enters the repo in Task 7. This step exists so nobody goes
-looking for the commit.
+Nothing here is tracked yet: `~/.config/fish` is a plain directory and `fish_plugins` enters the repo in Task 7. This step exists so nobody goes looking for the commit.
 
 ---
 
 ### Task 2: Phase 0 — make the fish configuration portable
 
-The repo's contract is that a clone works on any machine, not just this one.
-Four spots break that today, and all four are whole-file rewrites applied before
-Task 7 captures anything. A hardcoded `/Users/lorenzo` in a public repo is also
-the exact objection the design uses to reject outward symlinks.
+The repo's contract is that a clone works on any machine, not just this one. Four spots break that today, and all four are whole-file rewrites applied before Task 7 captures anything. A hardcoded `/Users/lorenzo` in a public repo is also the exact objection the design uses to reject outward symlinks.
 
-Every edit here is a complete file write rather than an in-place patch, so the
-task is idempotent and needs no diffing: re-running it produces the same four
-files.
+Every edit here is a complete file write rather than an in-place patch, so the task is idempotent and needs no diffing: re-running it produces the same four files.
 
 **Files:**
 
@@ -640,8 +383,7 @@ files.
 **Interfaces:**
 
 - Consumes: Task 1's 97-entry tree.
-- Produces: the four files Task 7 copies into `configs/fish/`, unchanged in
-  behaviour on this machine.
+- Produces: the four files Task 7 copies into `configs/fish/`, unchanged in behaviour on this machine.
 
 - [ ] **Step 1: Write all four files**
 
@@ -716,8 +458,7 @@ for f in "$F/config.fish" "$F/conf.d/rustup.fish" "$F/conf.d/android.fish" \
 done
 ```
 
-`fish --no-execute` parses without running. A syntax error in a `conf.d` file
-would otherwise show up as a mysterious behaviour change three steps later.
+`fish --no-execute` parses without running. A syntax error in a `conf.d` file would otherwise show up as a mysterious behaviour change three steps later.
 
 - [ ] **Step 3: Assert behaviour on this machine is unchanged**
 
@@ -734,14 +475,7 @@ test -f "$F/config.fish"
 if grep -q "/Users/" "$F/config.fish"; then echo "FAIL: a hardcoded home survives"; exit 1; fi
 ```
 
-Verified: a fresh `fish -c` picks up `conf.d` edits immediately — no shell
-restart, no new terminal. `core.editor = code --wait` and the
-`difftool`/`mergetool` commands stay as they are: they are `PATH` lookups, not
-absolute paths, and a machine without VS Code overrides them in `config-local`,
-which is included last and therefore wins. Ghostty needs nothing for platform
-differences — measured, `gtk-*` and `linux-cgroup` keys on macOS produce no
-diagnostics and exit 0, so the `macos-*` keys are inert on Linux rather than
-errors.
+Verified: a fresh `fish -c` picks up `conf.d` edits immediately — no shell restart, no new terminal. `core.editor = code --wait` and the `difftool`/`mergetool` commands stay as they are: they are `PATH` lookups, not absolute paths, and a machine without VS Code overrides them in `config-local`, which is included last and therefore wins. Ghostty needs nothing for platform differences — measured, `gtk-*` and `linux-cgroup` keys on macOS produce no diagnostics and exit 0, so the `macos-*` keys are inert on Linux rather than errors.
 
 - [ ] **Step 4: No commit**
 
@@ -751,24 +485,17 @@ Same reason as Task 1: these files are not tracked until Task 7.
 
 ### Task 3: Phase 0 — portable credential helper, then rename and push
 
-The rename comes first so that no artifact ever carries the old name, no clone
-URL needs fixing afterwards, and nothing relies on GitHub's redirect. It is
-reversible with `gh repo rename dotgit --yes`, and GitHub redirects both
-directions.
+The rename comes first so that no artifact ever carries the old name, no clone URL needs fixing afterwards, and nothing relies on GitHub's redirect. It is reversible with `gh repo rename dotgit --yes`, and GitHub redirects both directions.
 
 **Files:**
 
 - Modify: `~/.config/git/config` — `credential.helper`
-- Commit: `docs/superpowers/plans/2026-08-21-dotconfigs-migration.md` (this
-  plan), the design document (its amendments), `.markdownlint.jsonc` and
-  `README.md`
+- Commit: `docs/superpowers/plans/2026-08-21-dotconfigs-migration.md` (this plan), the design document (its amendments), `.markdownlint.jsonc` and `README.md`
 
 **Interfaces:**
 
 - Consumes: Task 0's state file.
-- Produces: `origin` = `https://github.com/LRNZ09/dotconfigs.git` with
-  everything pushed and CI green, and `BASELINE_COMMITS` in the state file —
-  the number Task 11's history gate asserts against.
+- Produces: `origin` = `https://github.com/LRNZ09/dotconfigs.git` with everything pushed and CI green, and `BASELINE_COMMITS` in the state file — the number Task 11's history gate asserts against.
 
 - [ ] **Step 1: Rename the repo and repoint the remote, in one chain**
 
@@ -781,9 +508,7 @@ gh repo rename dotconfigs -R LRNZ09/dotgit --yes \
 git remote get-url origin | grep -qx 'https://github.com/LRNZ09/dotconfigs.git'
 ```
 
-`--yes` skips the confirmation prompt. The `&&` chain matters: repointing
-`origin` after a *failed* rename would leave it naming a repo that does not
-exist, and the failure would only surface at the push.
+`--yes` skips the confirmation prompt. The `&&` chain matters: repointing `origin` after a *failed* rename would leave it naming a repo that does not exist, and the failure would only surface at the push.
 
 - [ ] **Step 2: Make the credential helper portable**
 
@@ -796,20 +521,9 @@ In `~/.config/git/config`, under `[credential]`, drop the absolute path:
 	# credentialStore is OS-specific — see config-local
 ```
 
-Git prepends `git-credential-` to any helper name that is neither an absolute
-path nor a `!`-prefixed command, so the portable spelling is the bare `manager`,
-which git resolves through `PATH` to `/usr/local/bin/git-credential-manager` —
-the same portability argument the file's own `!gh` comment already makes one
-section further down. Spelling it out in full sends git looking for
-`git-credential-git-credential-manager`, and nothing says so until a push needs
-a credential.
+Git prepends `git-credential-` to any helper name that is neither an absolute path nor a `!`-prefixed command, so the portable spelling is the bare `manager`, which git resolves through `PATH` to `/usr/local/bin/git-credential-manager` — the same portability argument the file's own `!gh` comment already makes one section further down. Spelling it out in full sends git looking for `git-credential-git-credential-manager`, and nothing says so until a push needs a credential.
 
-This step ran as written, and was reversed afterwards. `[credential]` now holds
-an empty `helper` followed by the absolute
-`/usr/local/share/gcm-core/git-credential-manager` — the GCM package's own
-install location, and what `git-credential-manager configure` writes. The two
-blocks above are left as the record of what this task did; the design
-document's portability table carries the current state.
+This step ran as written, and was reversed afterwards. `[credential]` now holds an empty `helper` followed by the absolute `/usr/local/share/gcm-core/git-credential-manager` — the GCM package's own install location, and what `git-credential-manager configure` writes. The two blocks above are left as the record of what this task did; the design document's portability table carries the current state.
 
 - [ ] **Step 3: Assert the helper still resolves**
 
@@ -841,9 +555,7 @@ git commit -m "Resolve credential-manager helper through PATH"
 test -z "$(git status --porcelain)"
 ```
 
-The pre-commit hook runs gitleaks on both. The tracked `config` carries a
-`users.noreply.github.com` address, which the allow-list in `.gitleaks.toml`
-permits by design.
+The pre-commit hook runs gitleaks on both. The tracked `config` carries a `users.noreply.github.com` address, which the allow-list in `.gitleaks.toml` permits by design.
 
 - [ ] **Step 5: Push, and gate on CI rather than eyeballing it**
 
@@ -854,9 +566,7 @@ git push
 ci_green "$(git rev-parse HEAD)"
 ```
 
-`ci_green` is the function Task 0 put in the state file. It waits for the
-gitleaks workflow run for *this* commit and returns non-zero on any conclusion
-other than success — unlike `gh run list`, which exits 0 whatever happened.
+`ci_green` is the function Task 0 put in the state file. It waits for the gitleaks workflow run for *this* commit and returns non-zero on any conclusion other than success — unlike `gh run list`, which exits 0 whatever happened.
 
 - [ ] **Step 6: Record the baseline in the state file**
 
@@ -870,36 +580,27 @@ test "$BASELINE_COMMITS" -ge 8
 git ls-files | wc -l | tr -d ' '
 ```
 
-Only the commit count is a gate. Task 7 deliberately grows the tracked-file
-total, so a file-count assertion would fail by design. The `ls-files` line is
-for the record.
+Only the commit count is a gate. Task 7 deliberately grows the tracked-file total, so a file-count assertion would fail by design. The `ls-files` line is for the record.
 
-Note on tooling: `gh repo rename` and the workflow-run query use the CLI because
-no connected GitHub MCP exposes a repo rename or a workflow-run listing.
+Note on tooling: `gh repo rename` and the workflow-run query use the CLI because no connected GitHub MCP exposes a repo rename or a workflow-run listing.
 
 ---
 
 ### Task 4: Phase 1 — clone, and restructure the git files into `configs/git/`
 
-Nothing happens inside `~/.config/git` in this phase. It stays a complete,
-working, pushed checkout — which is what makes it the rollback.
+Nothing happens inside `~/.config/git` in this phase. It stays a complete, working, pushed checkout — which is what makes it the rollback.
 
 **Files:**
 
 - Create: `~/Developer/LRNZ09/dotconfigs/` (the clone)
-- Move: `config`, `config-local.example`, `config-work.example`, `README.md`,
-  `.gitignore` → `configs/git/`
-- Modify: `configs/git/README.md` (rewritten — the Setup section no longer
-  applies)
+- Move: `config`, `config-local.example`, `config-work.example`, `README.md`, `.gitignore` → `configs/git/`
+- Modify: `configs/git/README.md` (rewritten — the Setup section no longer applies)
 - Delete (tracked, recoverable): `.githooks/pre-commit`
 
 **Interfaces:**
 
-- Consumes: `BASELINE_COMMITS` and `CLONE` from the state file, and the pushed
-  `dotconfigs` remote.
-- Produces: the clone at `$CLONE` with 5 files under `configs/git/`, and `git
-  log --follow -- configs/git/config` reaching through the rename. Task 5 adds
-  the sixth file.
+- Consumes: `BASELINE_COMMITS` and `CLONE` from the state file, and the pushed `dotconfigs` remote.
+- Produces: the clone at `$CLONE` with 5 files under `configs/git/`, and `git log --follow -- configs/git/config` reaching through the rename. Task 5 adds the sixth file.
 
 - [ ] **Step 1: Clone, and assert the history came with it**
 
@@ -920,25 +621,13 @@ git mv config config-local.example config-work.example README.md .gitignore conf
 git rm -q -r .githooks
 ```
 
-The `mkdir` is not cosmetic. Measured: `git mv` with multiple sources fails
-outright on a destination that does not exist (`fatal: destination
-'configs/git/' is not a directory`), and the obvious per-file workaround is
-worse — a single-source `git mv config configs/git` with no `configs/git/`
-present silently creates a *file* named `git`. Since git tracks no directories,
-the bare `mkdir` needs nothing else.
+The `mkdir` is not cosmetic. Measured: `git mv` with multiple sources fails outright on a destination that does not exist (`fatal: destination 'configs/git/' is not a directory`), and the obvious per-file workaround is worse — a single-source `git mv config configs/git` with no `configs/git/` present silently creates a *file* named `git`. Since git tracks no directories, the bare `mkdir` needs nothing else.
 
-`.githooks/` is superseded by the root `lefthook.yml` in Task 6, whose gitleaks
-hook covers what `.githooks/pre-commit` covers today. These are tracked files
-and stay recoverable from history. Leave `.gitleaks.toml`,
-`.markdownlint.jsonc` and `.github/workflows/gitleaks.yml` at the root; `docs/`
-is already there.
+`.githooks/` is superseded by the root `lefthook.yml` in Task 6, whose gitleaks hook covers what `.githooks/pre-commit` covers today. These are tracked files and stay recoverable from history. Leave `.gitleaks.toml`, `.markdownlint.jsonc` and `.github/workflows/gitleaks.yml` at the root; `docs/` is already there.
 
 - [ ] **Step 3: Rewrite `configs/git/README.md`**
 
-Do not just move it. Its Setup section tells the reader to run
-`git config core.hooksPath .githooks`, and step 2 just deleted that directory.
-Its per-machine identity section is what survives, and it stays next to the
-`config-local` and `config-work` files it describes. Replace the file with:
+Do not just move it. Its Setup section tells the reader to run `git config core.hooksPath .githooks`, and step 2 just deleted that directory. Its per-machine identity section is what survives, and it stays next to the `config-local` and `config-work` files it describes. Replace the file with:
 
 ````markdown
 # git
@@ -1007,19 +696,13 @@ test "$follow" -gt "$plain"
 git log --follow --diff-filter=R --name-status -1 -- configs/git/config | grep -q 'configs/git/config'
 ```
 
-Measured: after the move, plain `git log` reports 1 commit while `--follow`
-reports 6, and the move registers as `rename config => configs/git/config
-(100%)`. Asserting that `--follow` sees strictly more proves the rename was
-detected without hardcoding either count.
+Measured: after the move, plain `git log` reports 1 commit while `--follow` reports 6, and the move registers as `rename config => configs/git/config (100%)`. Asserting that `--follow` sees strictly more proves the rename was detected without hardcoding either count.
 
 ---
 
 ### Task 5: Phase 1 — track git's own default excludes file as `configs/git/ignore`
 
-`~/.gitignore` lives outside every repo, nothing backs it up, and the Task 12
-tarball does not even reach it — that archive is rooted at `~/.config` and this
-file sits one level up. Through the link, `$XDG_CONFIG_HOME/git/ignore` is git's
-own documented default, so tracking it there needs no configuration at all.
+`~/.gitignore` lives outside every repo, nothing backs it up, and the Task 12 tarball does not even reach it — that archive is rooted at `~/.config` and this file sits one level up. Through the link, `$XDG_CONFIG_HOME/git/ignore` is git's own documented default, so tracking it there needs no configuration at all.
 
 **Files:**
 
@@ -1029,8 +712,7 @@ own documented default, so tracking it there needs no configuration at all.
 **Interfaces:**
 
 - Consumes: Task 4's `configs/git/` directory.
-- Produces: 6 tracked files under `configs/git/` — the count Task 11's gate
-  asserts.
+- Produces: 6 tracked files under `configs/git/` — the count Task 11's gate asserts.
 
 - [ ] **Step 1: Copy — `cp`, not `mv`**
 
@@ -1041,12 +723,7 @@ cp ~/.gitignore configs/git/ignore
 test -f ~/.gitignore && test -f configs/git/ignore
 ```
 
-`cp` matters. Until Task 13 the live global config is still
-`~/.config/git/config`, which still points `core.excludesfile` at
-`~/.gitignore`; moving that file now would silently stop `.remember/` from being
-ignored anywhere, in exactly the window where a stray `git add -A` could stage
-it. The original is displaced in Task 13 with everything else, and nothing
-outside the repo is touched before then.
+`cp` matters. Until Task 13 the live global config is still `~/.config/git/config`, which still points `core.excludesfile` at `~/.gitignore`; moving that file now would silently stop `.remember/` from being ignored anywhere, in exactly the window where a stray `git add -A` could stage it. The original is displaced in Task 13 with everything else, and nothing outside the repo is touched before then.
 
 - [ ] **Step 2: Delete the `excludesfile` line from `configs/git/config`**
 
@@ -1071,15 +748,13 @@ test "$(git ls-files configs/git/ | wc -l | tr -d ' ')" -eq 6
 test -z "$(git status --porcelain)"
 ```
 
-`! grep -q` rather than `grep -c`: `grep -c` prints `0` and exits **1** when the
-edit is correct, which any `set -e` runner reads as a failure.
+`! grep -q` rather than `grep -c`: `grep -c` prints `0` and exits **1** when the edit is correct, which any `set -e` runner reads as a failure.
 
 ---
 
 ### Task 6: Phase 1 — the root README, the allow-list, and the hook
 
-The root `.gitignore` must exist **before** `configs/fish/` is added in Task 7,
-or `fish_variables` walks straight into the index.
+The root `.gitignore` must exist **before** `configs/fish/` is added in Task 7, or `fish_variables` walks straight into the index.
 
 **Files:**
 
@@ -1090,14 +765,11 @@ or `fish_variables` walks straight into the index.
 **Interfaces:**
 
 - Consumes: `.gitleaks.toml` at the root, which arrived with the rename.
-- Produces: the allow-list Task 7 depends on, and an installed pre-commit hook.
-  `bin/install` (Task 8) runs `lefthook install` itself; this task's manual run
-  is what gives *this* clone hooks now.
+- Produces: the allow-list Task 7 depends on, and an installed pre-commit hook. `bin/install` (Task 8) runs `lefthook install` itself; this task's manual run is what gives *this* clone hooks now.
 
 - [ ] **Step 1: Write the root `.gitignore`**
 
-Exactly this, and mind both mechanical constraints — the re-includes come after
-`/configs/fish/*`, and no pattern carries a trailing comment:
+Exactly this, and mind both mechanical constraints — the re-includes come after `/configs/fish/*`, and no pattern carries a trailing comment:
 
 ```gitignore
 .DS_Store
@@ -1127,10 +799,7 @@ Exactly this, and mind both mechanical constraints — the re-includes come afte
 !/configs/fish/functions/gfu.fish
 ```
 
-`config-local` and `config-work` are covered by `configs/git/.gitignore`, which
-arrived with the rename and needs no change. `/configs/fish/completions/` needs
-no rule of its own: `/configs/fish/*` covers it and nothing re-includes it,
-because every file in it is generated.
+`config-local` and `config-work` are covered by `configs/git/.gitignore`, which arrived with the rename and needs no change. `/configs/fish/completions/` needs no rule of its own: `/configs/fish/*` covers it and nothing re-includes it, because every file in it is generated.
 
 - [ ] **Step 2: Write `lefthook.yml`**
 
@@ -1147,10 +816,7 @@ pre-commit:
 
 - [ ] **Step 3: Write the root `README.md`**
 
-This file carries everything a person needs to *do*, and delegates every *why*
-to the design document with a single link. Do not restate measurements, rejected
-alternatives or phases here — duplicating them is how the two documents begin to
-disagree.
+This file carries everything a person needs to *do*, and delegates every *why* to the design document with a single link. Do not restate measurements, rejected alternatives or phases here — duplicating them is how the two documents begin to disagree.
 
 `````markdown
 # dotconfigs
@@ -1283,14 +949,11 @@ test -f "$CLONE/.git/hooks/pre-commit"
 markdownlint-cli2 README.md configs/git/README.md >/dev/null
 ```
 
-A fresh clone has no `core.hooksPath` — that setting lives in the *old*
-checkout's local config, which is not tracked and does not travel — so
-`lefthook install` is what gives this clone hooks at all.
+A fresh clone has no `core.hooksPath` — that setting lives in the *old* checkout's local config, which is not tracked and does not travel — so `lefthook install` is what gives this clone hooks at all.
 
 - [ ] **Step 5: Prove the hook blocks a secret, as a positive assertion**
 
-The finding is built from a split string so that this plan document does not
-itself contain an email address its own hook would reject:
+The finding is built from a split string so that this plan document does not itself contain an email address its own hook would reject:
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -1307,9 +970,7 @@ mv leaktest.txt ~/Backups/leaktest-$(date +%Y%m%dT%H%M%S).txt
 test -z "$(git status --porcelain)"
 ```
 
-Measured: gitleaks reports `leaks found: 1` and the commit exits non-zero. The
-timestamp on the moved file means a retried Task 6 cannot clobber the previous
-artefact.
+Measured: gitleaks reports `leaks found: 1` and the commit exits non-zero. The timestamp on the moved file means a retried Task 6 cannot clobber the previous artefact.
 
 ---
 
@@ -1317,18 +978,14 @@ artefact.
 
 **Files:**
 
-- Create: `configs/fish/` — the whole 97-entry tree, of which 6 files are
-  tracked
+- Create: `configs/fish/` — the whole 97-entry tree, of which 6 files are tracked
 - Modify: `configs/fish/fish_plugins` — add the `plugin-git` pin
 - Create: `configs/ghostty/config.ghostty`
 
 **Interfaces:**
 
-- Consumes: Task 1's 97-entry fish tree, Task 2's portability edits, Task 6's
-  allow-list.
-- Produces: `configs/fish/fish_plugins` with the pins Task 9's doctor compares
-  against, and `configs/ghostty/config.ghostty` — the include target
-  `bin/install` writes a stub for and `bin/doctor` validates.
+- Consumes: Task 1's 97-entry fish tree, Task 2's portability edits, Task 6's allow-list.
+- Produces: `configs/fish/fish_plugins` with the pins Task 9's doctor compares against, and `configs/ghostty/config.ghostty` — the include target `bin/install` writes a stub for and `bin/doctor` validates.
 
 - [ ] **Step 1: Copy the fish directory whole**
 
@@ -1340,13 +997,7 @@ test "$(find configs/fish ! -type d | wc -l | tr -d ' ')" -eq 97
 test "$(find configs/fish -type l | wc -l | tr -d ' ')" -eq 3
 ```
 
-All 97 entries, as they stand after Task 1. The allow-list stages only the 6
-hand-written ones, and the other 91 have to be present in the working tree
-regardless: after activation this directory *is* `~/.config/fish`, so fisher's
-files must physically live here for fish to work at all. Ignored and absent are
-different things. `cp -R` keeps the three OrbStack entries as symlinks into
-`/Applications/OrbStack.app`, which is correct — they are machine-specific,
-ignored, and a clone should not carry them.
+All 97 entries, as they stand after Task 1. The allow-list stages only the 6 hand-written ones, and the other 91 have to be present in the working tree regardless: after activation this directory *is* `~/.config/fish`, so fisher's files must physically live here for fish to work at all. Ignored and absent are different things. `cp -R` keeps the three OrbStack entries as symlinks into `/Applications/OrbStack.app`, which is correct — they are machine-specific, ignored, and a clone should not carry them.
 
 - [ ] **Step 2: Assert the allow-list stages exactly six files**
 
@@ -1363,9 +1014,7 @@ printf '%s\n' configs/fish/conf.d/android.fish configs/fish/conf.d/proto.fish \
 diff -u "$SP"/expected "$SP"/staged
 ```
 
-If anything else appears, stop: the `.gitignore` from Task 6 is wrong, most
-likely in the ordering of the two directory re-includes. `git check-ignore -v
-configs/fish/fish_variables` names the rule that should have caught it.
+If anything else appears, stop: the `.gitignore` from Task 6 is wrong, most likely in the ordering of the two directory re-includes. `git check-ignore -v configs/fish/fish_variables` names the rule that should have caught it.
 
 - [ ] **Step 3: Commit the fish record**
 
@@ -1377,8 +1026,7 @@ test "$(git ls-files configs/fish | wc -l | tr -d ' ')" -eq 6
 test -z "$(git status --porcelain)"
 ```
 
-An empty `git status` here is the real assertion: it means the allow-list covers
-every one of the 91 generated entries.
+An empty `git status` here is the real assertion: it means the allow-list covers every one of the 91 generated entries.
 
 - [ ] **Step 4: Pin the plugins**
 
@@ -1391,15 +1039,9 @@ halostatue/fish-macos@v7
 halostatue/fish-utils-core@v3
 ```
 
-No tag lookup is needed — the tags were resolved while the design was written.
-`jorgebucaran/fisher` stays unpinned on purpose: it is the installer, and it
-should stay current. `@v0.4` is the coarsest tag `jhillyerd/plugin-git`
-publishes, so nothing floats there. The two `halostatue` majors *do* float,
-which is a deliberate loosening: the pair is referenced by nothing in the
-tracked set and unused in 14 months, so the exposure is bounded.
+No tag lookup is needed — the tags were resolved while the design was written. `jorgebucaran/fisher` stays unpinned on purpose: it is the installer, and it should stay current. `@v0.4` is the coarsest tag `jhillyerd/plugin-git` publishes, so nothing floats there. The two `halostatue` majors *do* float, which is a deliberate loosening: the pair is referenced by nothing in the tracked set and unused in 14 months, so the exposure is bounded.
 
-This edit is the one guaranteed conflict in Task 13's merge — the machine's copy
-has no pin — and the merge rule is what resolves it.
+This edit is the one guaranteed conflict in Task 13's merge — the machine's copy has no pin — and the merge rule is what resolves it.
 
 - [ ] **Step 5: Assert and commit the pins**
 
@@ -1415,8 +1057,7 @@ git commit -m "Pin the fish plugins that publish a stable major"
 
 - [ ] **Step 6: Write `configs/ghostty/config.ghostty`**
 
-Keep only the four real settings out of a file that is otherwise the shipped
-template's comments, and end with the optional per-machine include:
+Keep only the four real settings out of a file that is otherwise the shipped template's comments, and end with the optional per-machine include:
 
 ```text
 macos-titlebar-style = tabs
@@ -1450,36 +1091,21 @@ test -z "$(git status --porcelain)"
 
 ### Task 8: Phase 1 — `bin/install`, with a sandbox that proves it
 
-**This task and the next three are the gate.** The design document says so
-directly: both scripts are specified there in prose only, prose in that document
-has a measured failure rate, and these scripts are the largest remaining body of
-it. So they are written against a harness that runs them for real, against a
-redirected `XDG_CONFIG_HOME`, before anything touches `~/.config`.
+**This task and the next three are the gate.** The design document says so directly: both scripts are specified there in prose only, prose in that document has a measured failure rate, and these scripts are the largest remaining body of it. So they are written against a harness that runs them for real, against a redirected `XDG_CONFIG_HOME`, before anything touches `~/.config`.
 
 **Files:**
 
 - Create: `bin/install`
-- Create (scratch, **not committed**): `$SP/work/mkfixture.sh`,
-  `$SP/work/tests-install.sh`
+- Create (scratch, **not committed**): `$SP/work/mkfixture.sh`, `$SP/work/tests-install.sh`
 
 **Interfaces:**
 
-- Consumes: `configs/fish/`, `configs/git/`, `configs/ghostty/config.ghostty`,
-  `.gitignore`, `lefthook.yml` from Tasks 4–7.
-- Produces: `bin/install`, taking `--non-interactive`, `--backup-dir DIR`,
-  `--resolve <fish|git>=<overwrite|merge|refuse>` and
-  `--expect-diff <fish|git>=<digest>` (both repeatable), and
-  exiting 0 on success, 1 on any unresolved path, and 2 on a bad argument.
-  Backups default to `~/Backups/consus-install-<timestamp>/` and hold each
-  displaced path at its position relative to the config root. It prints a
-  12-hex-character digest at the end of every diff, which
-  `--expect-diff` quotes back. Tasks 10 and 13 both drive it non-interactively.
+- Consumes: `configs/fish/`, `configs/git/`, `configs/ghostty/config.ghostty`, `.gitignore`, `lefthook.yml` from Tasks 4–7.
+- Produces: `bin/install`, taking `--non-interactive`, `--backup-dir DIR`, `--resolve <fish|git>=<overwrite|merge|refuse>` and `--expect-diff <fish|git>=<digest>` (both repeatable), and exiting 0 on success, 1 on any unresolved path, and 2 on a bad argument. Backups default to `~/Backups/consus-install-<timestamp>/` and hold each displaced path at its position relative to the config root. It prints a 12-hex-character digest at the end of every diff, which `--expect-diff` quotes back. Tasks 10 and 13 both drive it non-interactively.
 
 - [ ] **Step 1: Write the sandbox fixture builder**
 
-To `$SP/work/mkfixture.sh`. It copies the clone's working tree (without its
-history) and the machine's real `fish` and `git` trees, then applies the three
-kinds of drift that actually happen. Nothing under `~/.config` is written by it.
+To `$SP/work/mkfixture.sh`. It copies the clone's working tree (without its history) and the machine's real `fish` and `git` trees, then applies the three kinds of drift that actually happen. Nothing under `~/.config` is written by it.
 
 ```sh
 #!/bin/sh
@@ -1536,15 +1162,11 @@ git -c core.hooksPath=/dev/null commit -q --no-gpg-sign -m 'fixture'
 echo "fixture ready at $SB — $(git ls-files | wc -l | tr -d ' ') tracked files, $(git ls-files configs/fish | wc -l | tr -d ' ') under configs/fish/"
 ```
 
-`$SB` is under `$SP`, which Task 0 created as `~/Backups/dotconfigs-sandbox`
-with mode 700 — **not** under `/tmp`. The fixture copies `~/.config/git`
-wholesale, which means `config-local`, `config-work` and the mode-700
-`.remember/`, so a world-readable sandbox would leak all three.
+`$SB` is under `$SP`, which Task 0 created as `~/Backups/dotconfigs-sandbox` with mode 700 — **not** under `/tmp`. The fixture copies `~/.config/git` wholesale, which means `config-local`, `config-work` and the mode-700 `.remember/`, so a world-readable sandbox would leak all three.
 
 - [ ] **Step 2: Write the install suite**
 
-To `$SP/work/tests-install.sh`. Every assertion here was run while this plan was
-written; the counts in the expectations are what it actually printed.
+To `$SP/work/tests-install.sh`. Every assertion here was run while this plan was written; the counts in the expectations are what it actually printed.
 
 ```sh
 #!/bin/sh
@@ -1805,15 +1427,7 @@ check "  git was not linked either"          '[ ! -L "$SB/xdg/git" ] && [ ! -e "
 echo; echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]
 ```
 
-Three notes on the harness. The interactive resolutions are fed through
-`script -q /dev/null`, because `bin/install` refuses without a TTY by design and
-a plain pipe cannot exercise the prompt — the `sleep`s matter, since `script`
-forwards EOF immediately otherwise, and without them the answers shift by one
-and `m` lands on the *git* path, which is the one outcome Task 13 forbids. That
-fragility is exactly why Tasks 10 and 13 declare decisions instead of feeding
-the prompt, and why this pty test stays confined to a fixture whose state is
-fixed. Finally, the `.git/` assertion matches the *listing* lines: the diff's
-own header contains the string `.git/` in its explanatory text.
+Three notes on the harness. The interactive resolutions are fed through `script -q /dev/null`, because `bin/install` refuses without a TTY by design and a plain pipe cannot exercise the prompt — the `sleep`s matter, since `script` forwards EOF immediately otherwise, and without them the answers shift by one and `m` lands on the *git* path, which is the one outcome Task 13 forbids. That fragility is exactly why Tasks 10 and 13 declare decisions instead of feeding the prompt, and why this pty test stays confined to a fixture whose state is fixed. Finally, the `.git/` assertion matches the *listing* lines: the diff's own header contains the string `.git/` in its explanatory text.
 
 - [ ] **Step 3: Run the suite and watch it fail**
 
@@ -1822,8 +1436,7 @@ own header contains the string `.git/` in its explanatory text.
 SP="$SP" REPO="$CLONE" sh "$SP/work/tests-install.sh"
 ```
 
-Expected: `FAIL  install parses under sh` and every later assertion failing too,
-because `bin/install` does not exist yet.
+Expected: `FAIL  install parses under sh` and every later assertion failing too, because `bin/install` does not exist yet.
 
 - [ ] **Step 4: Write `bin/install`**
 
@@ -2370,55 +1983,18 @@ echo "✓ install complete. Verify with: $repo/bin/doctor"
 
 The parts that are load-bearing rather than stylistic:
 
-- **The run is all-or-nothing.** Every path is classified and every decision
-  settled in the plan phase; the validate phase then refuses the whole run if
-  any path is unresolved or any backup slot is occupied. A half-linked machine
-  is worse than an untouched one, and under the old shape a typo'd
-  `--resolve` refused `fish` and then still overwrote `git`.
-- **`git` is applied last, and its backup-move and link creation are adjacent.**
-  In the window between them there is no global git config at all. Because every
-  prompt happens in the plan phase, nothing can interrupt that window.
-- **A wrong link is relinked with no decision, even under
-  `--non-interactive`.** Moving a link never touches its target, so no machine
-  content is at risk — which is what lets a relocated clone self-heal from an
-  automated run.
-- **Merge is "back up, then copy the machine's tree over the repo's".** Files
-  the repo lacks arrive; files that differ land as unstaged modifications, so
-  `git status` becomes the review queue and `git restore` / `git commit` are the
-  two answers. Ignored files are copied too: `fish_variables` is runtime state,
-  and dropping it would discard every `set -U`, including fisher's own
-  bookkeeping.
-- **A declared merge requires `--expect-diff`.** Merge is the only action that
-  writes machine content into the repo, and the digest ties that write to a diff
-  somebody read. It also means a provisioner cannot carry a durable "always
-  merge" instruction: the digest goes stale the moment the machine drifts, and a
-  stale digest refuses.
-- **The digest covers content, not just file names.** A `differ:` line reads the
-  same whatever the file now holds, so a name-only digest would go stale when a
-  new file appeared but *not* when an already-differing file was edited again —
-  which is the most common kind of drift, and would have made the guarantee
-  above false. Each `differ:` line is therefore followed by the two content
-  hashes, and the digest is taken over the listing that was printed.
-- **merge is only defined for fish**, rejected at parse time for `--resolve` and
-  again at the decision point for a typed answer, and the prompt does not offer
-  it for the git path. The merge copy is `cp -R "$backup_dir/$rel/."`, which for
-  the git path would drag the old checkout's whole `.git` into this repo as a
-  nested repository `git status` never reports.
-- **A missing record refuses.** Without that guard a missing `$record/git` would
-  send the live global config to the backup and leave a dangling link in its
-  place, with git silently unconfigured and only `bin/doctor` any the wiser.
-- **An unreadable machine path refuses** rather than printing a partial diff and
-  a digest that commits to it.
-- **The validate phase proves the backup directory is usable**, because an
-  unwritable one would otherwise fail mid-apply, after earlier paths were
-  already linked — the half-linked machine the refusal claims is impossible.
+- **The run is all-or-nothing.** Every path is classified and every decision settled in the plan phase; the validate phase then refuses the whole run if any path is unresolved or any backup slot is occupied. A half-linked machine is worse than an untouched one, and under the old shape a typo'd `--resolve` refused `fish` and then still overwrote `git`.
+- **`git` is applied last, and its backup-move and link creation are adjacent.** In the window between them there is no global git config at all. Because every prompt happens in the plan phase, nothing can interrupt that window.
+- **A wrong link is relinked with no decision, even under `--non-interactive`.** Moving a link never touches its target, so no machine content is at risk — which is what lets a relocated clone self-heal from an automated run.
+- **Merge is "back up, then copy the machine's tree over the repo's".** Files the repo lacks arrive; files that differ land as unstaged modifications, so `git status` becomes the review queue and `git restore` / `git commit` are the two answers. Ignored files are copied too: `fish_variables` is runtime state, and dropping it would discard every `set -U`, including fisher's own bookkeeping.
+- **A declared merge requires `--expect-diff`.** Merge is the only action that writes machine content into the repo, and the digest ties that write to a diff somebody read. It also means a provisioner cannot carry a durable "always merge" instruction: the digest goes stale the moment the machine drifts, and a stale digest refuses.
+- **The digest covers content, not just file names.** A `differ:` line reads the same whatever the file now holds, so a name-only digest would go stale when a new file appeared but *not* when an already-differing file was edited again — which is the most common kind of drift, and would have made the guarantee above false. Each `differ:` line is therefore followed by the two content hashes, and the digest is taken over the listing that was printed.
+- **merge is only defined for fish**, rejected at parse time for `--resolve` and again at the decision point for a typed answer, and the prompt does not offer it for the git path. The merge copy is `cp -R "$backup_dir/$rel/."`, which for the git path would drag the old checkout's whole `.git` into this repo as a nested repository `git status` never reports.
+- **A missing record refuses.** Without that guard a missing `$record/git` would send the live global config to the backup and leave a dangling link in its place, with git silently unconfigured and only `bin/doctor` any the wiser.
+- **An unreadable machine path refuses** rather than printing a partial diff and a digest that commits to it.
+- **The validate phase proves the backup directory is usable**, because an unwritable one would otherwise fail mid-apply, after earlier paths were already linked — the half-linked machine the refusal claims is impossible.
 - **`chmod 700 "$repo"` has no `--`.** macOS `chmod` rejects the separator.
-- **`lefthook install` runs in a subshell that cds to the repo.** Measured: a
-  bare call resolves its config from the caller's CWD, so from an unrelated git
-  repo it creates a `lefthook.yml` *there*, installs hooks *there*, exits 0, and
-  then this script prints a success line naming the dotconfigs clone. Outside a
-  repo it exits 128, which with `set -eu` and `>/dev/null` would kill the
-  script silently after the links were already made.
+- **`lefthook install` runs in a subshell that cds to the repo.** Measured: a bare call resolves its config from the caller's CWD, so from an unrelated git repo it creates a `lefthook.yml` *there*, installs hooks *there*, exits 0, and then this script prints a success line naming the dotconfigs clone. Outside a repo it exits 128, which with `set -eu` and `>/dev/null` would kill the script silently after the links were already made.
 
 - [ ] **Step 5: Make it executable on disk, then run the suite green**
 
@@ -2430,9 +2006,7 @@ SP="$SP" REPO="$CLONE" sh "$SP/work/tests-install.sh"
 
 Expected last line: `115 passed, 0 failed`.
 
-`chmod` first, then `git add` — never `git add --chmod=+x`, which records
-`100755` in the index while leaving the file at `644` on disk, so the very next
-`./bin/install` dies with exit 126.
+`chmod` first, then `git add` — never `git add --chmod=+x`, which records `100755` in the index while leaving the file at `644` on disk, so the very next `./bin/install` dies with exit 126.
 
 - [ ] **Step 6: Commit**
 
@@ -2449,10 +2023,7 @@ test -z "$(git status --porcelain)"
 
 ### Task 9: Phase 1 — `bin/doctor`, the read-only probe
 
-Link integrity is the one invariant git cannot express: the repo can be pristine
-while `~/.config` points somewhere else, and for git and fish a severed link is
-completely silent. That is what makes this script load-bearing rather than a
-convenience — and what makes it the probe half of `sancus`' probe/apply pattern.
+Link integrity is the one invariant git cannot express: the repo can be pristine while `~/.config` points somewhere else, and for git and fish a severed link is completely silent. That is what makes this script load-bearing rather than a convenience — and what makes it the probe half of `sancus`' probe/apply pattern.
 
 **Files:**
 
@@ -2461,19 +2032,12 @@ convenience — and what makes it the probe half of `sancus`' probe/apply patter
 
 **Interfaces:**
 
-- Consumes: `configs/fish/fish_plugins` and its pins (Task 7),
-  `configs/ghostty/config.ghostty` (Task 7), the layout `bin/install` produces
-  (Task 8).
-- Produces: `bin/doctor`, exiting 0 when the machine matches the record and 1
-  when it does not, touching nothing either way. Task 11's gate requires it to
-  exit **1** — specifically failing its link check, not 126 from a missing
-  executable bit. Task 14 requires it to exit 0.
+- Consumes: `configs/fish/fish_plugins` and its pins (Task 7), `configs/ghostty/config.ghostty` (Task 7), the layout `bin/install` produces (Task 8).
+- Produces: `bin/doctor`, exiting 0 when the machine matches the record and 1 when it does not, touching nothing either way. Task 11's gate requires it to exit **1** — specifically failing its link check, not 126 from a missing executable bit. Task 14 requires it to exit 0.
 
 - [ ] **Step 1: Write the doctor suite**
 
-To `$SP/work/tests-doctor.sh`, alongside the fixture builder Task 8 wrote. It
-builds the links by hand rather than calling `bin/install`, so a failure here is
-a doctor failure and nothing else.
+To `$SP/work/tests-doctor.sh`, alongside the fixture builder Task 8 wrote. It builds the links by hand rather than calling `bin/install`, so a failure here is a doctor failure and nothing else.
 
 ```sh
 #!/bin/sh
@@ -2562,8 +2126,7 @@ echo; echo "$pass passed, $fail failed"; [ "$fail" -eq 0 ]
 SP="$SP" REPO="$CLONE" sh "$SP/work/tests-doctor.sh"
 ```
 
-Expected: `FAIL  doctor exists and parses under sh`, and the rest failing behind
-it.
+Expected: `FAIL  doctor exists and parses under sh`, and the rest failing behind it.
 
 - [ ] **Step 3: Write `bin/doctor`**
 
@@ -2752,42 +2315,15 @@ fi
 echo "✓ doctor: this machine matches the record"
 ```
 
-Five things here are not obvious, and three of them are corrections to the
-design document's prose:
+Five things here are not obvious, and three of them are corrections to the design document's prose:
 
-- **The stub assertion is not redundant.** `ghostty +validate-config` exits 1
-  when the stub names a missing target, but **0** when the stub is absent
-  altogether — ghostty falls back to Application Support and reports success. So
-  ghostty self-reports a broken include and stays silent about no include at
-  all.
-- **The fish checks are gated on the link.** Measured: fish *creates*
-  `$XDG_CONFIG_HOME/fish` when it is missing. Querying fisher through a severed
-  link would plant a real directory where the link belongs, which turns
-  install's silent relink into a prompt on the next run — a read-only probe
-  cannot do that.
-- **Pins are stripped from both sides of the declared-vs-installed check.** The
-  declaration carries `@v0.4`; fisher's record does not until `fisher update`
-  runs. Comparing literally reports "declared but not installed: 1" forever.
-- **OrbStack's completions are matched by symlink target, not by name.** The
-  spec names the three files; matching `*OrbStack.app*` classifies a fourth one
-  the same way instead of reporting it as unclassified forever. The arithmetic
-  still closes at three today.
-- **Fisher stores its paths with a literal `~/.config/fish/` prefix**, so doctor
-  strips that prefix (and the two real-path forms) before comparing against the
-  directory it is actually enumerating. Without it nothing ever matches and all
-  97 entries report as unclassified.
+- **The stub assertion is not redundant.** `ghostty +validate-config` exits 1 when the stub names a missing target, but **0** when the stub is absent altogether — ghostty falls back to Application Support and reports success. So ghostty self-reports a broken include and stays silent about no include at all.
+- **The fish checks are gated on the link.** Measured: fish *creates* `$XDG_CONFIG_HOME/fish` when it is missing. Querying fisher through a severed link would plant a real directory where the link belongs, which turns install's silent relink into a prompt on the next run — a read-only probe cannot do that.
+- **Pins are stripped from both sides of the declared-vs-installed check.** The declaration carries `@v0.4`; fisher's record does not until `fisher update` runs. Comparing literally reports "declared but not installed: 1" forever.
+- **OrbStack's completions are matched by symlink target, not by name.** The spec names the three files; matching `*OrbStack.app*` classifies a fourth one the same way instead of reporting it as unclassified forever. The arithmetic still closes at three today.
+- **Fisher stores its paths with a literal `~/.config/fish/` prefix**, so doctor strips that prefix (and the two real-path forms) before comparing against the directory it is actually enumerating. Without it nothing ever matches and all 97 entries report as unclassified.
 
-Two reports are advisory and never fail the run. The unclassified-files report
-exists because a new hand-written `functions/newthing.fish` produces **no
-`git status` output at all** — measured, not even as untracked. The review-queue
-report exists because an unattended merge can leave machine content in the
-working tree, and a log that does not mention it reads as clean; it does not
-fail, because the tools read the working tree, so a dirty tree means the
-*committed* record has not caught up, not that the machine is broken. The
-migration tasks gate on it themselves. By contrast the
-declared-but-not-installed check **does** fail: without it there is no probe for
-a correct clone with correct links, green links, and not one of the 82 plugin
-files on disk.
+Two reports are advisory and never fail the run. The unclassified-files report exists because a new hand-written `functions/newthing.fish` produces **no `git status` output at all** — measured, not even as untracked. The review-queue report exists because an unattended merge can leave machine content in the working tree, and a log that does not mention it reads as clean; it does not fail, because the tools read the working tree, so a dirty tree means the *committed* record has not caught up, not that the machine is broken. The migration tasks gate on it themselves. By contrast the declared-but-not-installed check **does** fail: without it there is no probe for a correct clone with correct links, green links, and not one of the 82 plugin files on disk.
 
 - [ ] **Step 4: Make it executable, then run both suites green**
 
@@ -2809,9 +2345,7 @@ test ! -e ~/.config/ghostty
 test -d ~/.config/fish && test ! -L ~/.config/fish
 ```
 
-This is exactly the state Task 11's gate asserts: doctor fails its link check
-with rc 1, and touches nothing while doing it — in particular it does not create
-`~/.config/ghostty`, and it does not let fish create `~/.config/fish`.
+This is exactly the state Task 11's gate asserts: doctor fails its link check with rc 1, and touches nothing while doing it — in particular it does not create `~/.config/ghostty`, and it does not let fish create `~/.config/fish`.
 
 - [ ] **Step 6: Commit**
 
@@ -2828,37 +2362,24 @@ test -z "$(git status --porcelain)"
 
 ### Task 10: Phase 2 — rehearse the merge path against real drift
 
-Required, not optional. The merge path is the one piece of this design that no
-measurement in the design document covers, and its conflict rule only matters
-when there is a conflict — so it has to be exercised against drift that is real
-rather than imagined. It happens on this machine, but against a redirected
-`XDG_CONFIG_HOME`, so no real path is touched.
+Required, not optional. The merge path is the one piece of this design that no measurement in the design document covers, and its conflict rule only matters when there is a conflict — so it has to be exercised against drift that is real rather than imagined. It happens on this machine, but against a redirected `XDG_CONFIG_HOME`, so no real path is touched.
 
-The rehearsal runs in two passes, and the second one quotes back a digest the
-first one printed. That is the unattended substitute for a human reading a diff
-and then answering a prompt: the decision still cannot be made without the diff,
-because a digest that no longer matches refuses.
+The rehearsal runs in two passes, and the second one quotes back a digest the first one printed. That is the unattended substitute for a human reading a diff and then answering a prompt: the decision still cannot be made without the diff, because a digest that no longer matches refuses.
 
 **Files:**
 
 - Create (scratch, **not committed**): `$SP/work/rehearse.sh`
-- Create: `~/Backups/dotconfigs-rehearsal-<timestamp>/{xdg,xdg2,backup}` and its
-  logs
-- Temporarily modify: `configs/fish/config.fish`, `configs/fish/fish_plugins`,
-  `configs/fish/functions/drifted.fish` in the clone — all restored by the
-  script's last step
+- Create: `~/Backups/dotconfigs-rehearsal-<timestamp>/{xdg,xdg2,backup}` and its logs
+- Temporarily modify: `configs/fish/config.fish`, `configs/fish/fish_plugins`, `configs/fish/functions/drifted.fish` in the clone — all restored by the script's last step
 
 **Interfaces:**
 
 - Consumes: `bin/install` and `bin/doctor` from Tasks 8–9.
-- Produces: a clean tree, and the confidence Task 11's gate is signing off on.
-  The gate requires a clean tree, so the restore at the end is not optional.
+- Produces: a clean tree, and the confidence Task 11's gate is signing off on. The gate requires a clean tree, so the restore at the end is not optional.
 
 - [ ] **Step 1: Write the rehearsal script**
 
-To `$SP/work/rehearse.sh`. `FISH_SRC` and `GIT_SRC` default to the machine's
-real trees; they exist so the script could be verified against a simulated
-post-Task-1 tree while this plan was written.
+To `$SP/work/rehearse.sh`. `FISH_SRC` and `GIT_SRC` default to the machine's real trees; they exist so the script could be verified against a simulated post-Task-1 tree while this plan was written.
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -2999,10 +2520,7 @@ cat "$SP/rehearse.out"
 test "$rc" -eq 0
 ```
 
-Expected last lines: `50 passed, 0 failed`, then the log directory. Every
-assertion the first draft wrote as prose — "the diff must have named
-`config.fish`", "doctor must name `functions/drifted.fish` and only it" — is one
-of those 50.
+Expected last lines: `50 passed, 0 failed`, then the log directory. Every assertion the first draft wrote as prose — "the diff must have named `config.fish`", "doctor must name `functions/drifted.fish` and only it" — is one of those 50.
 
 - [ ] **Step 3: Record the rehearsal directory, and confirm the clone is clean**
 
@@ -3016,26 +2534,20 @@ cd "$CLONE" && test -z "$(git status --porcelain)"
 grep -qx 'halostatue/fish-macos@v7' configs/fish/fish_plugins
 ```
 
-The script restores `configs/fish/config.fish` and `configs/fish/fish_plugins`
-and moves `configs/fish/functions/drifted.fish` into the backup, so the clone
-ends clean and the pin is back. Nothing is deleted.
+The script restores `configs/fish/config.fish` and `configs/fish/fish_plugins` and moves `configs/fish/functions/drifted.fish` into the backup, so the clone ends clean and the pin is back. Nothing is deleted.
 
 ---
 
 ### Task 11: Phase 2 — the gate, then push
 
-Nothing is pushed until all of these pass. They are written as assertions rather
-than observations, because two of them pass by *exiting non-zero*.
+Nothing is pushed until all of these pass. They are written as assertions rather than observations, because two of them pass by *exiting non-zero*.
 
 **Files:** none — this task only asserts and pushes.
 
 **Interfaces:**
 
-- Consumes: `BASELINE_COMMITS` from the state file, everything Tasks 4–10
-  produced, and `ci_green` from Task 0.
-- Produces: a pushed `main` **with an upstream**. Without `push -u`,
-  `git log @{u}..` exits 128 and no caller — including `sancus` and Task 14 — can
-  tell whether the satellite is ahead.
+- Consumes: `BASELINE_COMMITS` from the state file, everything Tasks 4–10 produced, and `ci_green` from Task 0.
+- Produces: a pushed `main` **with an upstream**. Without `push -u`, `git log @{u}..` exits 128 and no caller — including `sancus` and Task 14 — can tell whether the satellite is ahead.
 
 - [ ] **Step 1: Run the gate**
 
@@ -3066,15 +2578,9 @@ markdownlint-cli2 README.md configs/git/README.md docs/superpowers/specs/2026-08
 	docs/superpowers/plans/*.md >/dev/null
 ```
 
-Every line must exit 0. `$BASELINE_COMMITS` comes from the state file rather
-than from a human's notes — asserting against it rather than a literal is what
-keeps this gate meaningful after this document is committed again.
+Every line must exit 0. `$BASELINE_COMMITS` comes from the state file rather than from a human's notes — asserting against it rather than a literal is what keeps this gate meaningful after this document is committed again.
 
-The `--follow` line is self-relative on purpose: after the move, a plain `git
-log -- configs/git/config` reports 1 commit while `--follow` reports 6, and the
-move registers as `rename config => configs/git/config (100%)`. Asserting that
-`--follow` sees strictly more proves the rename was detected without hardcoding
-either count.
+The `--follow` line is self-relative on purpose: after the move, a plain `git log -- configs/git/config` reports 1 commit while `--follow` reports 6, and the move registers as `rename config => configs/git/config (100%)`. Asserting that `--follow` sees strictly more proves the rename was detected without hardcoding either count.
 
 - [ ] **Step 2: Push with an upstream, and gate on CI**
 
@@ -3086,19 +2592,13 @@ git rev-parse --abbrev-ref '@{u}' | grep -qx 'origin/main'
 ci_green "$(git rev-parse HEAD)"
 ```
 
-`ci_green` waits for the gitleaks run for *this* commit and returns non-zero on
-any conclusion other than success. Task 12 is the first step that touches the
-live `~/.config`, so this is the last point where stopping costs nothing.
+`ci_green` waits for the gitleaks run for *this* commit and returns non-zero on any conclusion other than success. Task 12 is the first step that touches the live `~/.config`, so this is the last point where stopping costs nothing.
 
 ---
 
 ### Task 12: Phase 3 — the one backup that matters
 
-For everything under `~/.config` that this repo does not touch — which includes
-all 32 credentials across seven stores, and every dropped tool's directory —
-this archive is the only copy that exists anywhere. There is no Time Machine
-destination on this machine and no restic, borg, arq, kopia, duplicati or
-Backblaze installed.
+For everything under `~/.config` that this repo does not touch — which includes all 32 credentials across seven stores, and every dropped tool's directory — this archive is the only copy that exists anywhere. There is no Time Machine destination on this machine and no restic, borg, arq, kopia, duplicati or Backblaze installed.
 
 **Files:**
 
@@ -3107,9 +2607,7 @@ Backblaze installed.
 **Interfaces:**
 
 - Consumes: nothing.
-- Produces: `ARCHIVE` in the state file — the path the rollback section falls
-  back to. It cannot supply `~/.gitignore`, which sits one level above the
-  archive root; Task 13 handles that file separately.
+- Produces: `ARCHIVE` in the state file — the path the rollback section falls back to. It cannot supply `~/.gitignore`, which sits one level above the archive root; Task 13 handles that file separately.
 
 - [ ] **Step 1: Archive `~/.config` whole, with no exclusions**
 
@@ -3122,16 +2620,9 @@ printf 'ARCHIVE=%s\n' "$ARCHIVE" >> ~/Backups/dotconfigs-migration.env
 tar czf "$ARCHIVE" -C ~ .config
 ```
 
-The path is computed once and recorded, not recomputed: a run that crosses
-midnight would otherwise write one filename and verify a different, nonexistent
-one, and `tar tzf` on a missing file reads like archive corruption.
+The path is computed once and recorded, not recomputed: a run that crosses midnight would otherwise write one filename and verify a different, nonexistent one, and `tar tzf` on a missing file reads like archive corruption.
 
-Not `~/Desktop` and not `~/Documents`: both are iCloud-synced, and this archive
-contains every credential under `~/.config` in the clear. An earlier revision of
-the design excluded `gatsby/` and `raycast/` as regenerable cache; measured,
-that was not a trade worth making — `~/.config` is 279 MB on disk and the
-complete archive is 22 MB against roughly 7.5 MB pruned. The exclusions bought
-14.5 MB and cost completeness.
+Not `~/Desktop` and not `~/Documents`: both are iCloud-synced, and this archive contains every credential under `~/.config` in the clear. An earlier revision of the design excluded `gatsby/` and `raycast/` as regenerable cache; measured, that was not a trade worth making — `~/.config` is 279 MB on disk and the complete archive is 22 MB against roughly 7.5 MB pruned. The exclusions bought 14.5 MB and cost completeness.
 
 - [ ] **Step 2: Verify the archive before going further**
 
@@ -3144,45 +2635,32 @@ tar tzf "$ARCHIVE" | grep -q '^\.config/git/config$'
 tar tzf "$ARCHIVE" | grep -q '^\.config/fish/fish_plugins$'
 ```
 
-Measured: `~/.config/micro` is root-owned but world-readable, so the archive
-needs no `sudo` and produces no partial result.
+Measured: `~/.config/micro` is root-owned but world-readable, so the archive needs no `sudo` and produces no partial result.
 
 ---
 
 ### Task 13: Phase 3 — activate
 
-Nothing in this phase is deleted. Three machine-local items move to their final
-home first, while `~/.config/git` is still live, and then one `bin/install` run
-covers all three remaining paths.
+Nothing in this phase is deleted. Three machine-local items move to their final home first, while `~/.config/git` is still live, and then one `bin/install` run covers all three remaining paths.
 
-The preflight is what makes this safe to run unattended. `git=overwrite` moves
-the old checkout into the backup, so anything uncommitted there would survive
-only as a backup nobody reads — the interactive flow relied on a human noticing
-that in the diff. Here it is asserted instead, along with the three destinations
-the moves need to be free.
+The preflight is what makes this safe to run unattended. `git=overwrite` moves the old checkout into the backup, so anything uncommitted there would survive only as a backup nobody reads — the interactive flow relied on a human noticing that in the diff. Here it is asserted instead, along with the three destinations the moves need to be free.
 
 **Files:**
 
 - Create (scratch, **not committed**): `$SP/work/activate.sh`
-- Move: `~/.config/git/{config-local,config-work,.remember}` →
-  `<clone>/configs/git/`
+- Move: `~/.config/git/{config-local,config-work,.remember}` → `<clone>/configs/git/`
 - Move: `~/.gitignore` → `$BK/gitignore-home`
-- Displace (moved to `$BK` by install): `~/.config/git`, and the machine's
-  `~/.config/fish` tree
+- Displace (moved to `$BK` by install): `~/.config/git`, and the machine's `~/.config/fish` tree
 - Create: `~/.config/{git,fish}` symlinks, `~/.config/ghostty/config.ghostty`
 
 **Interfaces:**
 
-- Consumes: `bin/install` (Task 8), the pushed repo (Task 11), the archive
-  (Task 12).
-- Produces: `BK` and `FISH_DIGEST` in the state file. `BK` is the path every
-  rollback command starts from.
+- Consumes: `bin/install` (Task 8), the pushed repo (Task 11), the archive (Task 12).
+- Produces: `BK` and `FISH_DIGEST` in the state file. `BK` is the path every rollback command starts from.
 
 - [ ] **Step 1: Write the activation script**
 
-To `$SP/work/activate.sh`. `SKIP_HOME_EXCLUDES` exists only because this script
-was verified against a redirected `XDG_CONFIG_HOME` while the plan was written;
-leave it unset for the real run.
+To `$SP/work/activate.sh`. `SKIP_HOME_EXCLUDES` exists only because this script was verified against a redirected `XDG_CONFIG_HOME` while the plan was written; leave it unset for the real run.
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3321,16 +2799,7 @@ cat "$SP/activate.out"
 test "$rc" -eq 0
 ```
 
-Expected: fifteen `GATE OK` lines, then `20 passed, 0 failed`. If a gate fails,
-nothing has changed and the message names what to fix. That includes the apply
-gate: if the diff drifted between the two passes the digest no longer matches,
-install refuses, and the gate prints the exact commands that put the three
-relocated items back before a retry. If the review queue turns out to hold
-anything other than `configs/fish/fish_plugins`, the script says so and stops
-without pushing — the machine is activated and working at that point, and only
-the push is outstanding. That is the one place this plan deliberately waits for
-a person: the alternative is guessing which of two versions of a config file was
-right.
+Expected: fifteen `GATE OK` lines, then `20 passed, 0 failed`. If a gate fails, nothing has changed and the message names what to fix. That includes the apply gate: if the diff drifted between the two passes the digest no longer matches, install refuses, and the gate prints the exact commands that put the three relocated items back before a retry. If the review queue turns out to hold anything other than `configs/fish/fish_plugins`, the script says so and stops without pushing — the machine is activated and working at that point, and only the push is outstanding. That is the one place this plan deliberately waits for a person: the alternative is guessing which of two versions of a config file was right.
 
 - [ ] **Step 3: Push, now that the queue is empty**
 
@@ -3346,8 +2815,7 @@ else
 fi
 ```
 
-- [ ] **Step 4: Confirm the shape, and that the state file has what rollback
-      needs**
+- [ ] **Step 4: Confirm the shape, and that the state file has what rollback needs**
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3361,20 +2829,15 @@ test -f "$BK/gitignore-home"
 test ! -e ~/.gitignore
 ```
 
-Deleting `~/Library/Application Support/com.mitchellh.ghostty/config` is
-**optional and not recommended** — the include already overrides it, and Ghostty
-rewrites that file itself.
+Deleting `~/Library/Application Support/com.mitchellh.ghostty/config` is **optional and not recommended** — the include already overrides it, and Ghostty rewrites that file itself.
 
-Optional, and not a gate: `fisher update` reconciles the `@v0.4` declaration
-with what is actually installed. Doctor passes either way, because its
-declared-vs-installed check compares plugin names with pins stripped.
+Optional, and not a gate: `fisher update` reconciles the `@v0.4` declaration with what is actually installed. Doctor passes either way, because its declared-vs-installed check compares plugin names with pins stripped.
 
 ---
 
 ### Task 14: Phase 4 — verify the machine, end to end
 
-Run this only once Task 13 is complete and pushed, or the first two checks fail
-by design.
+Run this only once Task 13 is complete and pushed, or the first two checks fail by design.
 
 **Files:** none — assertions only.
 
@@ -3394,8 +2857,7 @@ git rev-parse --abbrev-ref '@{u}' | grep -qx 'origin/main' \
 	&& test -z "$(git log --oneline @{u}..)"
 ```
 
-A bare `git log @{u}..` exits 0 whether or not it prints, which is why this
-compares its output instead.
+A bare `git log @{u}..` exits 0 whether or not it prints, which is why this compares its output instead.
 
 - [ ] **Step 2: git reads the repo, and identity resolves through it**
 
@@ -3410,11 +2872,7 @@ test "$(git -C "$W" config --get user.email)" \
 	= "$(git config -f "$CLONE/configs/git/config-work" --get user.email)"
 ```
 
-Measured, and the reason `--show-origin` is asserted against the link path
-rather than the clone path: git reports the path it was given, so the origin
-reads `$HOME/.config/git/config-local`, not the resolved location.
-`git config --global --list` does **not** expand includes — using it here is how
-a false negative gets recorded.
+Measured, and the reason `--show-origin` is asserted against the link path rather than the clone path: git reports the path it was given, so the origin reads `$HOME/.config/git/config-local`, not the resolved location. `git config --global --list` does **not** expand includes — using it here is how a false negative gets recorded.
 
 - [ ] **Step 3: Signing works, which is not the same as a key resolving**
 
@@ -3434,10 +2892,7 @@ W2=$(mktemp -d ~/Developer/work/dotconfigs-verify-XXXX)
 mv "$W2" ~/Backups/
 ```
 
-The `|| { echo …; exit 1; }` wrappers matter: an `&&` chain that prints nothing
-on failure is indistinguishable from success to an unattended runner. The work
-repo has to be *physically* inside `~/Developer/work` — a link into it never
-matches the `includeIf` pattern, and says nothing about it.
+The `|| { echo …; exit 1; }` wrappers matter: an `&&` chain that prints nothing on failure is indistinguishable from success to an unattended runner. The work repo has to be *physically* inside `~/Developer/work` — a link into it never matches the `includeIf` pattern, and says nothing about it.
 
 - [ ] **Step 4: fish and ghostty read the repo**
 
@@ -3452,9 +2907,7 @@ ghostty +show-config | grep -q 'window-save-state = always'
 grep -qF "$CLONE/configs/ghostty/config.ghostty" ~/.config/ghostty/config.ghostty
 ```
 
-`$__fish_config_dir` resolving to the link path rather than the clone is the
-point: fish reaches the repo through its own default path with nothing
-configured.
+`$__fish_config_dir` resolving to the link path rather than the clone is the point: fish reaches the repo through its own default path with nothing configured.
 
 - [ ] **Step 5: The link is live, and `~/.config` is still not a repo**
 
@@ -3467,9 +2920,7 @@ if git -C ~/.config rev-parse --git-dir >/dev/null 2>&1; then
 fi
 ```
 
-That last one is a feature, not a failure: `~/.config` itself is still not a
-repo, so nothing that walks up from an unlinked tool's config directory finds
-one.
+That last one is a feature, not a failure: `~/.config` itself is still not a repo, so nothing that walks up from an unlinked tool's config directory finds one.
 
 ---
 
@@ -3490,8 +2941,7 @@ one.
 
 - [ ] **Step 1: Add a LICENSE**
 
-`vesta` has one and this repo does not, which is ordinary housekeeping for a
-public repo rather than a decision.
+`vesta` has one and this repo does not, which is ordinary housekeeping for a public repo rather than a decision.
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3505,22 +2955,13 @@ git commit -m "Add MIT license"
 
 - [ ] **Step 2: Turn the design document into a record**
 
-Change its `Status:` line to `executed <date>`, and correct the four stale
-counts that correction #14 names — they are the only other edits this step
-makes, because the phases stop being instructions and become the record of what
-was done to this machine:
+Change its `Status:` line to `executed <date>`, and correct the four stale counts that correction #14 names — they are the only other edits this step makes, because the phases stop being instructions and become the record of what was done to this machine:
 
-- line 148: `tracks 14 files on purpose — 7 fish, 6 git, 1 ghostty` becomes
-  `tracks 13 files on purpose — 6 fish, 6 git, 1 ghostty`
-- line 616: `as written above, 7 files stage` becomes `6 files stage`, and the
-  `7 files still stage` after it becomes `6 files still stage`
-- line 619: `silently dropping all four tracked conf.d files` becomes
-  `all three tracked conf.d files`
+- line 148: `tracks 14 files on purpose — 7 fish, 6 git, 1 ghostty` becomes `tracks 13 files on purpose — 6 fish, 6 git, 1 ghostty`
+- line 616: `as written above, 7 files stage` becomes `6 files stage`, and the `7 files still stage` after it becomes `6 files still stage`
+- line 619: `silently dropping all four tracked conf.d files` becomes `all three tracked conf.d files`
 
-Leave everything else alone. The measured-facts section is why nobody
-re-derives whether ghostty outranks a symlink or what `git add --chmod=+x` does,
-and the README is the operational document, so there is no ambiguity about where
-to look.
+Leave everything else alone. The measured-facts section is why nobody re-derives whether ghostty outranks a symlink or what `git add --chmod=+x` does, and the README is the operational document, so there is no ambiguity about where to look.
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3536,21 +2977,13 @@ ci_green "$(git rev-parse HEAD)"
 
 - [ ] **Step 3: Correct the stale memory**
 
-`/Users/lorenzo/.claude/memory/reference-git-signing-setup.md` states that the
-global config is "its own version-controlled repo at `~/.config/git/` (XDG
-native: no symlink, no env var, works in GUI clients too)". Under this design
-`~/.config/git` **is** a symlink into `~/Developer/LRNZ09/dotconfigs`. Three
-edits, not one:
+`/Users/lorenzo/.claude/memory/reference-git-signing-setup.md` states that the global config is "its own version-controlled repo at `~/.config/git/` (XDG native: no symlink, no env var, works in GUI clients too)". Under this design `~/.config/git` **is** a symlink into `~/Developer/LRNZ09/dotconfigs`. Three edits, not one:
 
 - the layout sentence, which is now wrong;
-- the "if the config is ever symlinked into `$HOME`" gotcha, which is now
-  actively misleading — note that the relative-include hazard it describes does
-  *not* apply here, because git resolves `include.path` against the directory of
-  the file containing it, which through a directory link is the repo;
+- the "if the config is ever symlinked into `$HOME`" gotcha, which is now actively misleading — note that the relative-include hazard it describes does *not* apply here, because git resolves `include.path` against the directory of the file containing it, which through a directory link is the repo;
 - any reference to the repo as `dotgit`, which is now `dotconfigs`.
 
-The signing facts in that file — two keys, which one covers `~/Developer/work`,
-the `config-local` / `config-work` split — are all still correct and stay.
+The signing facts in that file — two keys, which one covers `~/Developer/work`, the `config-local` / `config-work` split — are all still correct and stay.
 
 ```sh
 M=/Users/lorenzo/.claude/memory/reference-git-signing-setup.md
@@ -3561,9 +2994,7 @@ if grep -q "no symlink" "$M"; then echo "FAIL: the stale layout claim survives";
 
 - [ ] **Step 4: Create the restore checklist the plan keeps referring to**
 
-There is no restore checklist on this machine today, so the plan creates one
-rather than pointing at a file that does not exist. Write
-`/Users/lorenzo/.claude/memory/reference-machine-restore-checklist.md`:
+There is no restore checklist on this machine today, so the plan creates one rather than pointing at a file that does not exist. Write `/Users/lorenzo/.claude/memory/reference-machine-restore-checklist.md`:
 
 ```markdown
 ---
@@ -3601,54 +3032,27 @@ grep -q 'reference-machine-restore-checklist' /Users/lorenzo/.claude/memory/MEMO
 
 - [ ] **Step 5: Note what the open terminals will look like**
 
-Already-running fish sessions keep the removed plugins' abbreviations and
-universal variables until they are restarted. "It still looks wrong in my open
-terminal" is expected, and is not a reason to roll back. A new tab is the check.
+Already-running fish sessions keep the removed plugins' abbreviations and universal variables until they are restarted. "It still looks wrong in my open terminal" is expected, and is not a reason to roll back. A new tab is the check.
 
 - [ ] **Step 6: Leave the backups alone, deliberately**
 
-The migration backup under `$BK`, the rehearsal directory under `$R`, and the
-sandbox under `$SP` are all redundant once Task 14 passes and the push is
-confirmed, but nothing in this plan deletes them. Discard them when you want to,
-however you prefer to discard things. `$ARCHIVE` is the one to keep: for every
-untracked tool under `~/.config`, it is the only copy that exists.
+The migration backup under `$BK`, the rehearsal directory under `$R`, and the sandbox under `$SP` are all redundant once Task 14 passes and the push is confirmed, but nothing in this plan deletes them. Discard them when you want to, however you prefer to discard things. `$ARCHIVE` is the one to keep: for every untracked tool under `~/.config`, it is the only copy that exists.
 
-The state file `~/Backups/dotconfigs-migration.env` is worth keeping until the
-backups are gone, because the rollback section reads `BK` and `ARCHIVE` from it.
+The state file `~/Backups/dotconfigs-migration.env` is worth keeping until the backups are gone, because the rollback section reads `BK` and `ARCHIVE` from it.
 
 - [ ] **Step 7: Hand off to `sancus`**
 
-The prerequisite is now satisfied: a plain clone at a real path, with an
-upstream, an idempotent `bin/install` that refuses without a TTY unless the
-decision was declared, and a read-only `bin/doctor` probe. The `sancus` spec
-(`docs/superpowers/specs/2026-08-20-sancus-design.md` in `LRNZ09/sancus`) still
-describes the superseded shape — a `dotconfigs → ~/.config` graft,
-satellites "cloned to their real paths with no symlink layer", and "adding a
-newly-configured tool is a gitignore line". All three were replaced. Those
-sections need **rewriting against the contract in "What this repo guarantees a
-provisioner", not patching**: eight bullet edits applied to an architecture
-section describing the old shape would leave that document contradicting itself.
-That rewrite is its own piece of work, not a step here.
+The prerequisite is now satisfied: a plain clone at a real path, with an upstream, an idempotent `bin/install` that refuses without a TTY unless the decision was declared, and a read-only `bin/doctor` probe. The `sancus` spec (`docs/superpowers/specs/2026-08-20-sancus-design.md` in `LRNZ09/sancus`) still describes the superseded shape — a `dotconfigs → ~/.config` graft, satellites "cloned to their real paths with no symlink layer", and "adding a newly-configured tool is a gitignore line". All three were replaced. Those sections need **rewriting against the contract in "What this repo guarantees a provisioner", not patching**: eight bullet edits applied to an architecture section describing the old shape would leave that document contradicting itself. That rewrite is its own piece of work, not a step here.
 
-One thing to carry into it: `sancus` must call `bin/install --non-interactive`
-with **no** `--resolve`. A satellite entry that declared a resolution would be
-deciding on drift nobody looked at — and if it declared `merge`, the
-`--expect-diff` digest it carried would go stale on the first drift and refuse
-anyway. The refusal is the contract.
+One thing to carry into it: `sancus` must call `bin/install --non-interactive` with **no** `--resolve`. A satellite entry that declared a resolution would be deciding on drift nobody looked at — and if it declared `merge`, the `--expect-diff` digest it carried would go stale on the first drift and refuse anyway. The refusal is the contract.
 
 ---
 
 ## If it goes wrong: rollback
 
-Not a task — the plan's escape hatch. Before Task 13 there is nothing to roll
-back that matters: `~/.config` is untouched, the clone can be deleted, and
-`gh repo rename dotgit --yes` undoes the rename.
+Not a task — the plan's escape hatch. Before Task 13 there is nothing to roll back that matters: `~/.config` is untouched, the clone can be deleted, and `gh repo rename dotgit --yes` undoes the rename.
 
-After Task 13, four paths changed — `~/.config/git`, `~/.config/fish`, the
-ghostty stub and `~/.gitignore` — and rollback needs no deletion either. **The
-links must be moved aside before anything is restored over them, or a restore
-writes straight through them into the repo's working tree.** Moving a link moves
-the link itself and never touches its target; measured.
+After Task 13, four paths changed — `~/.config/git`, `~/.config/fish`, the ghostty stub and `~/.gitignore` — and rollback needs no deletion either. **The links must be moved aside before anything is restored over them, or a restore writes straight through them into the repo's working tree.** Moving a link moves the link itself and never touches its target; measured.
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3672,32 +3076,15 @@ test -d ~/.config/git/.git && test ! -L ~/.config/git
 test -f ~/.gitignore
 ```
 
-`BK` comes from the state file rather than from a note, which is the whole
-reason the state file exists: this block may run days later, in a shell that
-never saw Task 13. If the state file is gone too,
-`BK=$(ls -d ~/Backups/dotconfigs-migration-* | tail -1)` recovers it.
+`BK` comes from the state file rather than from a note, which is the whole reason the state file exists: this block may run days later, in a shell that never saw Task 13. If the state file is gone too, `BK=$(ls -d ~/Backups/dotconfigs-migration-* | tail -1)` recovers it.
 
-`~/.gitignore` has to come back explicitly, and the tarball **cannot** supply
-it: that archive is rooted at `~/.config` and this file sits one level up. The
-restored `configs/git/config` still points `core.excludesfile` at it, so
-skipping that line leaves the setting dangling and stops `.remember/` being
-ignored anywhere — the exposure Task 5 exists to avoid. If `$BK` has already
-been discarded, recreate the file by copying `configs/git/ignore` out of the
-repo.
+`~/.gitignore` has to come back explicitly, and the tarball **cannot** supply it: that archive is rooted at `~/.config` and this file sits one level up. The restored `configs/git/config` still points `core.excludesfile` at it, so skipping that line leaves the setting dangling and stops `.remember/` being ignored anywhere — the exposure Task 5 exists to avoid. If `$BK` has already been discarded, recreate the file by copying `configs/git/ignore` out of the repo.
 
-The `--unset-upstream` line matters. The restored `~/.config/git` is a live
-checkout whose remote was repointed in Task 3 and whose branch tracks a `main`
-that now contains the restructure — so it reports itself behind, and a
-`git pull` there would redo the migration underneath you. Unsetting the upstream
-(or removing the remote outright) stops that. Making it a normal tracking clone
-again means reverting the restructure commits on origin first.
+The `--unset-upstream` line matters. The restored `~/.config/git` is a live checkout whose remote was repointed in Task 3 and whose branch tracks a `main` that now contains the restructure — so it reports itself behind, and a `git pull` there would redo the migration underneath you. Unsetting the upstream (or removing the remote outright) stops that. Making it a normal tracking clone again means reverting the restructure commits on origin first.
 
-If `sancus` has been given a `dotconfigs` satellite entry by then, disable it
-before rolling back, or its `./bin/install --non-interactive` will recreate the
-links on the next run.
+If `sancus` has been given a `dotconfigs` satellite entry by then, disable it before rolling back, or its `./bin/install --non-interactive` will recreate the links on the next run.
 
-If the migration backup is already discarded, the tarball is the fallback for
-the same paths:
+If the migration backup is already discarded, the tarball is the fallback for the same paths:
 
 ```sh
 . ~/Backups/dotconfigs-migration.env
@@ -3706,17 +3093,8 @@ tar xzf "$ARCHIVE" -C ~ .config/git .config/fish
 
 ## What this plan does not do
 
-- It does not rewrite the `sancus` spec. Task 15 records what needs rewriting and
-  why patching it would be worse.
+- It does not rewrite the `sancus` spec. Task 15 records what needs rewriting and why patching it would be worse.
 - It does not delete anything, ever — including the backups it creates.
-- It does not change `~/.gnupg/gpg-agent.conf`. Unattended signing already works
-  because the passphrase lives in the macOS keychain; raising the agent's cache
-  TTLs or presetting the passphrase would weaken this machine's credential
-  handling to buy something it already has. Task 0 verifies rather than
-  reconfigures.
-- It does not touch `~/.claude`, `~/.proto`, `~/.agents`, `~/.hammerspoon`,
-  `zed/`, `raycast/` or VS Code. All of them are out of scope by design, and all
-  of them are inside the Task 12 archive.
-- It does not test the fresh-machine bootstrap end to end, because testing that
-  means rebuilding a machine. The sequence is documented in the README, it needs
-  network, and `bin/doctor` detects the state that calls for it.
+- It does not change `~/.gnupg/gpg-agent.conf`. Unattended signing already works because the passphrase lives in the macOS keychain; raising the agent's cache TTLs or presetting the passphrase would weaken this machine's credential handling to buy something it already has. Task 0 verifies rather than reconfigures.
+- It does not touch `~/.claude`, `~/.proto`, `~/.agents`, `~/.hammerspoon`, `zed/`, `raycast/` or VS Code. All of them are out of scope by design, and all of them are inside the Task 12 archive.
+- It does not test the fresh-machine bootstrap end to end, because testing that means rebuilding a machine. The sequence is documented in the README, it needs network, and `bin/doctor` detects the state that calls for it.

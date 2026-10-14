@@ -1,79 +1,38 @@
 # proto into dotconfigs Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use
-> checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move proto's global `.prototools` into `dotconfigs` as
-`configs/proto/.prototools`, reached through a file symlink at proto's own
-path, and archive `LRNZ09/dotproto` — without moving the 2.3 GB store, without
-setting `PROTO_HOME`, and without a human at the keyboard.
+**Goal:** Move proto's global `.prototools` into `dotconfigs` as `configs/proto/.prototools`, reached through a file symlink at proto's own path, and archive `LRNZ09/dotproto` — without moving the 2.3 GB store, without setting `PROTO_HOME`, and without a human at the keyboard.
 
-**Architecture:** The store stays where proto puts it. `bin/install` gains a
-third path whose record is a single *file* rather than a directory, because
-`PROTO_HOME` relocates the whole store and cannot separate the record from the
-2.3 GB of toolchains around it. proto rewrites `.prototools` in place, so the
-symlink survives its writes and a `proto pin` lands in the repo as an ordinary
-unstaged modification. `bin/doctor` gains the link assertion plus the check
-that earns its place — declared-but-not-installed, read from each tool's
-`manifest.json`.
+**Architecture:** The store stays where proto puts it. `bin/install` gains a third path whose record is a single *file* rather than a directory, because `PROTO_HOME` relocates the whole store and cannot separate the record from the 2.3 GB of toolchains around it. proto rewrites `.prototools` in place, so the symlink survives its writes and a `proto pin` lands in the repo as an ordinary unstaged modification. `bin/doctor` gains the link assertion plus the check that earns its place — declared-but-not-installed, read from each tool's `manifest.json`.
 
-**Tech Stack:** POSIX `sh` (both scripts must pass `sh -n`), proto 0.62.2 via
-Homebrew, fish 4.8.0, `jq` 1.8.2 (declared in sancus's `Brewfile:68`), git
-2.55.0, lefthook, gitleaks, `gh` for the archive.
+**Tech Stack:** POSIX `sh` (both scripts must pass `sh -n`), proto 0.62.2 via Homebrew, fish 4.8.0, `jq` 1.8.2 (declared in sancus's `Brewfile:68`), git 2.55.0, lefthook, gitleaks, `gh` for the archive.
 
-**Spec:** `docs/superpowers/specs/2026-09-21-proto-into-dotconfigs-design.md`
-— read it alongside this plan. Every "why" lives there; this plan argues from
-it and does not restate its measurements.
+**Spec:** `docs/superpowers/specs/2026-09-21-proto-into-dotconfigs-design.md` — read it alongside this plan. Every "why" lives there; this plan argues from it and does not restate its measurements.
 
 ## Running this unattended
 
-Every task here is executable with nobody watching, on the same three
-conditions the 2026-08-21 plan established:
+Every task here is executable with nobody watching, on the same three conditions the 2026-08-21 plan established:
 
-1. **No command waits on a human.** `bin/install`'s prompt is replaced by
-   `--resolve proto=overwrite` in Task 8. `gh repo archive` takes `--yes`.
-   `GIT_EDITOR=false` makes an accidental editor invocation fail rather than
-   hang.
+1. **No command waits on a human.** `bin/install`'s prompt is replaced by `--resolve proto=overwrite` in Task 8. `gh repo archive` takes `--yes`. `GIT_EDITOR=false` makes an accidental editor invocation fail rather than hang.
 2. **Every check is a command with an exit code.** No step asserts in prose.
-3. **Nothing is hand-carried between tasks.** Values live in a state file every
-   task sources.
+3. **Nothing is hand-carried between tasks.** Values live in a state file every task sources.
 
-**Before going AFK, Task 0 must pass.** It verifies a signed commit completes
-without a passphrase prompt, that `gh` is authenticated, and that `jq` and
-Homebrew's proto are both present.
+**Before going AFK, Task 0 must pass.** It verifies a signed commit completes without a passphrase prompt, that `gh` is authenticated, and that `jq` and Homebrew's proto are both present.
 
-This plan has no equivalent of the 2026-08-21 plan's Task 13 review queue. The
-record it installs is a file this plan writes, so there is no second version of
-it to reconcile.
+This plan has no equivalent of the 2026-08-21 plan's Task 13 review queue. The record it installs is a file this plan writes, so there is no second version of it to reconcile.
 
 ## Global Constraints
 
 Every task's requirements implicitly include this section.
 
 - **Clone path:** `~/Developer/LRNZ09/dotconfigs`, already present, on `main`.
-- **State file:** `~/Backups/proto-consus.env`. Tasks append `KEY=value` lines
-  and later tasks open with `. ~/Backups/proto-consus.env`.
-- **Nothing on this machine is ever deleted.** Every displaced path is *moved*
-  into `~/Backups/proto-consus-<timestamp>/`, including Task 1's self-installed
-  proto and Task 2's `~/.proto/.git`. Three narrow exceptions, none of them a
-  machine path: Task 3 removes a `.protolock` it created one line earlier inside
-  the repo, Task 7's fixture builder wipes and rebuilds its own scratch
-  directory under `$SP` on every run, and the rollback removes a *symlink* this
-  plan created, which never touches the link's target.
-- **Backups never go to `~/Desktop` or `~/Documents`** — both are iCloud-synced.
-  `~/Backups` only, mode `700`.
-- **The store is never moved.** No task runs `mv` on `~/.proto` itself. Measured
-  and recorded in the spec: 24 text files under `tools/ruby/4.0.5/` hard-code
-  the absolute store path in shebangs and `rbconfig.rb`, and `proto regen` does
-  not rewrite them.
-- **`PROTO_HOME` is never set by anything this plan writes.** Not in
-  `conf.d/proto.fish`, not in the record, not in either script. The scripts
-  *read* it, mirroring proto's own precedence, so a machine that sets it for its
-  own reasons still gets the right store.
-- **Store resolution, in both scripts, is exactly proto's:** `PROTO_HOME`, then
-  `$XDG_DATA_HOME/proto`, then `$HOME/.proto`. Any other spelling is a bug.
+- **State file:** `~/Backups/proto-consus.env`. Tasks append `KEY=value` lines and later tasks open with `. ~/Backups/proto-consus.env`.
+- **Nothing on this machine is ever deleted.** Every displaced path is *moved* into `~/Backups/proto-consus-<timestamp>/`, including Task 1's self-installed proto and Task 2's `~/.proto/.git`. Three narrow exceptions, none of them a machine path: Task 3 removes a `.protolock` it created one line earlier inside the repo, Task 7's fixture builder wipes and rebuilds its own scratch directory under `$SP` on every run, and the rollback removes a *symlink* this plan created, which never touches the link's target.
+- **Backups never go to `~/Desktop` or `~/Documents`** — both are iCloud-synced. `~/Backups` only, mode `700`.
+- **The store is never moved.** No task runs `mv` on `~/.proto` itself. Measured and recorded in the spec: 24 text files under `tools/ruby/4.0.5/` hard-code the absolute store path in shebangs and `rbconfig.rb`, and `proto regen` does not rewrite them.
+- **`PROTO_HOME` is never set by anything this plan writes.** Not in `conf.d/proto.fish`, not in the record, not in either script. The scripts *read* it, mirroring proto's own precedence, so a machine that sets it for its own reasons still gets the right store.
+- **Store resolution, in both scripts, is exactly proto's:** `PROTO_HOME`, then `$XDG_DATA_HOME/proto`, then `$HOME/.proto`. Any other spelling is a bug.
 - **Environment for the whole run:**
 
   ```sh
@@ -81,18 +40,10 @@ Every task's requirements implicitly include this section.
   export PROTO_YES=true PROTO_REPORTER=text
   ```
 
-  `PROTO_YES` is proto's own `--yes`, and it belongs here for the same reason
-  `GH_PROMPT_DISABLED` does: several steps run proto, and with
-  `auto-install = true` a resolution can offer to install. `PROTO_REPORTER=text`
-  keeps proto's agent-mode NDJSON out of every captured output in this plan, not
-  only out of fish.
+  `PROTO_YES` is proto's own `--yes`, and it belongs here for the same reason `GH_PROMPT_DISABLED` does: several steps run proto, and with `auto-install = true` a resolution can offer to install. `PROTO_REPORTER=text` keeps proto's agent-mode NDJSON out of every captured output in this plan, not only out of fish.
 
-  **`true`, not `1`.** Measured: `PROTO_YES=1` makes *every* proto invocation
-  fail with `error: invalid value '1' for '--yes' [possible values: true,
-  false]`. proto parses these as booleans by name, so the shell convention of 1
-  for true silently converts a convenience into a total outage.
-- **Every destructive step guards its variables.** A step that moves or removes
-  anything opens with:
+  **`true`, not `1`.** Measured: `PROTO_YES=1` makes *every* proto invocation fail with `error: invalid value '1' for '--yes' [possible values: true, false]`. proto parses these as booleans by name, so the shell convention of 1 for true silently converts a convenience into a total outage.
+- **Every destructive step guards its variables.** A step that moves or removes anything opens with:
 
   ```sh
   set -eu
@@ -100,56 +51,27 @@ Every task's requirements implicitly include this section.
   : "${STORE:?}" "${BK:?}" "${CLONE:?}"
   ```
 
-  Without this, a state file that failed to source — renamed, truncated, a
-  different `$HOME` under the runner — expands the variables empty and turns
-  `mv "$STORE/bin/proto" "$BK/..."` into something aimed at `/`. The sandbox
-  suite already does this; the plan's own steps must too.
+  Without this, a state file that failed to source — renamed, truncated, a different `$HOME` under the runner — expands the variables empty and turns `mv "$STORE/bin/proto" "$BK/..."` into something aimed at `/`. The sandbox suite already does this; the plan's own steps must too.
 
-- **Every commit passes `-m` or `-F -`.** No `git rebase -i`, no
-  `git commit --amend`, no `git config --edit`.
-- **Both scripts stay POSIX `sh`** with `#!/bin/sh` and `set -eu`, and must pass
-  `sh -n`. Hard tabs for indentation, matching the existing files.
-- **`.gitignore`: no pattern may carry a trailing comment.** gitignore honours
-  `#` only at the start of a line.
-- **Never commit a non-noreply email address.** `.gitleaks.toml` flags every
-  email that is not `*@users.noreply.github.com`.
-- **`bin/doctor` stays read-only and network-free.** It must not run
-  `proto pin` (measured: downloads plugin WASM), `proto install`, or
-  `proto status` (measured: exits 0 while failing). Reading
-  `tools/<tool>/manifest.json` is the whole check.
-- **Never assert a proto version in `bin/doctor`.** Which binary answers depends
-  on which shell ran it; the divergence is reported, not gated.
-- **`npm = "bundled"` is not a version.** The pin check skips any spec that does
-  not start with a digit, which covers `bundled` and every alias.
-- **`tools/<tool>/<version>/` is not a reliable installed-check.** Measured:
-  `tools/rust/` contains only manifests — rust 1.97.0 is installed and
-  `installed_versions` says so, but no version directory exists, because proto's
-  rust support defers to `~/.rustup`. Always read `manifest.json`. The spec's
-  "Verified facts" predates this measurement and says "directories"; Task 9
-  corrects it.
-- **A pin may be a version *prefix*.** `proto pin node 22 --to global` writes
-  `node = "22"`, while the manifest records `22.23.1`. An exact-match lookup
-  would report that as missing forever, so the check accepts an exact match or a
-  match on `<pin>.` as a prefix.
-- **Zero extracted pins is a failure, not a pass.** A check that finds nothing
-  to check must say so rather than print the green line.
-- **The record's settings key is `unstable-lockfile` until Task 1 lands.** It is
-  the same field as `lockfile`; a file carrying both fails with
-  `duplicate field`. Task 3 writes `lockfile`, which is only safe because Task 1
-  has already removed proto 0.58.2.
-- **`gh repo archive` is reversible**; `gh repo delete` is not. This plan never
-  deletes a repository.
+- **Every commit passes `-m` or `-F -`.** No `git rebase -i`, no `git commit --amend`, no `git config --edit`.
+- **Both scripts stay POSIX `sh`** with `#!/bin/sh` and `set -eu`, and must pass `sh -n`. Hard tabs for indentation, matching the existing files.
+- **`.gitignore`: no pattern may carry a trailing comment.** gitignore honours `#` only at the start of a line.
+- **Never commit a non-noreply email address.** `.gitleaks.toml` flags every email that is not `*@users.noreply.github.com`.
+- **`bin/doctor` stays read-only and network-free.** It must not run `proto pin` (measured: downloads plugin WASM), `proto install`, or `proto status` (measured: exits 0 while failing). Reading `tools/<tool>/manifest.json` is the whole check.
+- **Never assert a proto version in `bin/doctor`.** Which binary answers depends on which shell ran it; the divergence is reported, not gated.
+- **`npm = "bundled"` is not a version.** The pin check skips any spec that does not start with a digit, which covers `bundled` and every alias.
+- **`tools/<tool>/<version>/` is not a reliable installed-check.** Measured: `tools/rust/` contains only manifests — rust 1.97.0 is installed and `installed_versions` says so, but no version directory exists, because proto's rust support defers to `~/.rustup`. Always read `manifest.json`. The spec's "Verified facts" predates this measurement and says "directories"; Task 9 corrects it.
+- **A pin may be a version *prefix*.** `proto pin node 22 --to global` writes `node = "22"`, while the manifest records `22.23.1`. An exact-match lookup would report that as missing forever, so the check accepts an exact match or a match on `<pin>.` as a prefix.
+- **Zero extracted pins is a failure, not a pass.** A check that finds nothing to check must say so rather than print the green line.
+- **The record's settings key is `unstable-lockfile` until Task 1 lands.** It is the same field as `lockfile`; a file carrying both fails with `duplicate field`. Task 3 writes `lockfile`, which is only safe because Task 1 has already removed proto 0.58.2.
+- **`gh repo archive` is reversible**; `gh repo delete` is not. This plan never deletes a repository.
 
 ## Execution order, and the one gate
 
 - **Task 0** changes nothing and must pass first.
-- **Tasks 1–2** change this machine and are worth doing whether or not the rest
-  proceeds: Task 1 fixes a live breakage (`proto status`), Task 2 removes a
-  checkout that can silently restore an old record over the link.
+- **Tasks 1–2** change this machine and are worth doing whether or not the rest proceeds: Task 1 fixes a live breakage (`proto status`), Task 2 removes a checkout that can silently restore an old record over the link.
 - **Tasks 3–6** happen entirely inside the clone. `~/.proto` is untouched.
-- **Task 7 is the gate.** The two scripts ship with a sandbox suite that runs
-  them against a redirected `PROTO_HOME` and `XDG_CONFIG_HOME`. **No step in
-  Task 8 or later may start until Task 7 passes.**
+- **Task 7 is the gate.** The two scripts ship with a sandbox suite that runs them against a redirected `PROTO_HOME` and `XDG_CONFIG_HOME`. **No step in Task 8 or later may start until Task 7 passes.**
 - **Task 8** is the only one that changes the shape of `~/.proto`.
 - **Tasks 9–10** are documentation and the archive.
 
@@ -172,15 +94,9 @@ Every task's requirements implicitly include this section.
     └── plans/2026-09-21-proto-into-dotconfigs.md          this plan
 ```
 
-Nothing under `configs/proto/` is generated, so it needs no allow-list block —
-proto is on the ghostty side of that line, not the fish side. The single
-`.gitignore` rule is defensive, for a `.protolock` a stray `proto` run inside
-that directory would drop there.
+Nothing under `configs/proto/` is generated, so it needs no allow-list block — proto is on the ghostty side of that line, not the fish side. The single `.gitignore` rule is defensive, for a `.protolock` a stray `proto` run inside that directory would drop there.
 
-One scratch file, `tests-proto.sh`, lives under `$SP` and is **deliberately not
-committed**, matching how the 2026-08-21 plan treats its five harness scripts.
-The spec fixes the repo layout and adding a `tests/` directory is not a decision
-this plan gets to make.
+One scratch file, `tests-proto.sh`, lives under `$SP` and is **deliberately not committed**, matching how the 2026-08-21 plan treats its five harness scripts. The spec fixes the repo layout and adding a `tests/` directory is not a decision this plan gets to make.
 
 ---
 
@@ -193,9 +109,7 @@ this plan gets to make.
 **Interfaces:**
 
 - Consumes: nothing.
-- Produces: `~/Backups/proto-consus.env`, defining `CLONE`, `SP`, `STORE`,
-  `BK`, exporting `GH_PROMPT_DISABLED`, `GH_NO_UPDATE_NOTIFIER` and
-  `GIT_EDITOR`. Every later task opens with `. ~/Backups/proto-consus.env`.
+- Produces: `~/Backups/proto-consus.env`, defining `CLONE`, `SP`, `STORE`, `BK`, exporting `GH_PROMPT_DISABLED`, `GH_NO_UPDATE_NOTIFIER` and `GIT_EDITOR`. Every later task opens with `. ~/Backups/proto-consus.env`.
 
 - [ ] **Step 1: Harden the working directories**
 
@@ -269,10 +183,7 @@ b1="$BK"; s1="$STORE"
 test "${BK#"$HOME"/Backups/}" != "$BK" || { echo "FAIL: BK is not under ~/Backups"; exit 1; }
 ```
 
-This is not ceremony. `BK` is the single directory every displaced path is moved
-into, and the rollback reads it — if it differed between tasks, Task 1 would
-back up to one directory and Task 8 would assert against another, and both would
-look fine until a rollback was needed.
+This is not ceremony. `BK` is the single directory every displaced path is moved into, and the rollback reads it — if it differed between tasks, Task 1 would back up to one directory and Task 8 would assert against another, and both would look fine until a rollback was needed.
 
 - [ ] **Step 3: Assert the tools this plan cannot work around**
 
@@ -322,10 +233,7 @@ else
 fi
 ```
 
-`%G?` is quoted because `?` is a glob under zsh and the command fails with
-`no matches found` unquoted. `--batch` is what makes the probe meaningful: it
-forbids an interactive passphrase prompt, so a locked key fails here — loudly,
-before anything has changed — instead of hanging at the first commit.
+`%G?` is quoted because `?` is a glob under zsh and the command fails with `no matches found` unquoted. `--batch` is what makes the probe meaningful: it forbids an interactive passphrase prompt, so a locked key fails here — loudly, before anything has changed — instead of hanging at the first commit.
 
 - [ ] **Step 5: Record the baseline**
 
@@ -342,12 +250,7 @@ test -n "$BASELINE_COMMITS"
 
 ### Task 1: Phase 0 — make Homebrew's proto the only one
 
-`~/.proto/bin/proto` is a byte-identical copy of
-`~/.proto/tools/proto/0.58.2/proto` — proto manages itself as one of its own
-tools — and activation prepends
-`~/.proto/bin`, so it shadows Homebrew's 0.62.2 permanently. That shadow is a
-live breakage, not a tidiness question: `proto status` exits 0 while failing,
-because the record's plugins require ≥ 0.60.0.
+`~/.proto/bin/proto` is a byte-identical copy of `~/.proto/tools/proto/0.58.2/proto` — proto manages itself as one of its own tools — and activation prepends `~/.proto/bin`, so it shadows Homebrew's 0.62.2 permanently. That shadow is a live breakage, not a tidiness question: `proto status` exits 0 while failing, because the record's plugins require ≥ 0.60.0.
 
 This task is worth doing whether or not the rest of the plan proceeds.
 
@@ -396,9 +299,7 @@ v=$(PROTO_REPORTER=text /opt/homebrew/bin/proto --version)
 echo "$v" | grep -q '0\.62' || { echo "FAIL: unexpected version: $v"; exit 1; }
 ```
 
-The check runs the absolute path rather than a bare `proto`: this shell still
-carries the old `_PROTO_ACTIVATED_PATH`, and a bare name would prove nothing
-about a *new* shell. Task 8 asserts the new shell.
+The check runs the absolute path rather than a bare `proto`: this shell still carries the old `_PROTO_ACTIVATED_PATH`, and a bare name would prove nothing about a *new* shell. Task 8 asserts the new shell.
 
 - [ ] **Step 4: Assert `proto status` recovers**
 
@@ -413,25 +314,15 @@ grep -q 'bun' "$SP/status-after.txt" ||
 	{ echo "FAIL: status listed no tools — the global record was not read"; exit 1; }
 ```
 
-`--config-mode global` is not optional, and leaving it off is the same trap the
-record's README warns about. Measured before this plan ran: a bare
-`proto status` from the clone defaults to `upwards`, never loads the global
-record, and prints `Error: proto::no_configured_tools` — so the obvious
-assertion fails for a reason that has nothing to do with the thing being tested.
-Matching `^Error:` rather than any occurrence of "error" keeps a tool path or a
-version string containing those letters from tripping it.
+`--config-mode global` is not optional, and leaving it off is the same trap the record's README warns about. Measured before this plan ran: a bare `proto status` from the clone defaults to `upwards`, never loads the global record, and prints `Error: proto::no_configured_tools` — so the obvious assertion fails for a reason that has nothing to do with the thing being tested. Matching `^Error:` rather than any occurrence of "error" keeps a tool path or a version string containing those letters from tripping it.
 
-If this still fails, stop: the record in Task 3 is written on the assumption
-that a working 0.62.2 is what reads it.
+If this still fails, stop: the record in Task 3 is written on the assumption that a working 0.62.2 is what reads it.
 
 ---
 
 ### Task 2: Phase 1 — retire the dotproto checkout
 
-While `$STORE/.git` exists it claims ownership of `$STORE/.prototools`, so any
-`git checkout`, `git switch` or `git pull` run there restores the old record
-over the link Task 8 installs, and `git status` reports the repo's version as
-modified.
+While `$STORE/.git` exists it claims ownership of `$STORE/.prototools`, so any `git checkout`, `git switch` or `git pull` run there restores the old record over the link Task 8 installs, and `git status` reports the repo's version as modified.
 
 **Files:**
 
@@ -454,8 +345,7 @@ test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "FAIL: n
 echo "DOTPROTO_HEAD=$(git rev-parse HEAD)" >> ~/Backups/proto-consus.env
 ```
 
-Anything uncommitted here would survive only as a backup nobody reads. Task 10
-needs `DOTPROTO_HEAD` to confirm the archive matches what was displaced.
+Anything uncommitted here would survive only as a backup nobody reads. Task 10 needs `DOTPROTO_HEAD` to confirm the archive matches what was displaced.
 
 - [ ] **Step 2: Move `.git` and `.gitignore` aside**
 
@@ -478,10 +368,7 @@ test ! -e "$STORE/.git"
 test -d "$BK/dotproto/.git"
 ```
 
-`.gitignore` goes too: it is dotproto's deny-by-default allow-list and protects
-nothing once no repo is rooted there. `README.md`, `.prototools` and
-`.protolock` stay in place — Task 8 replaces `.prototools`, and the other two
-are left for now so a rollback has something to read.
+`.gitignore` goes too: it is dotproto's deny-by-default allow-list and protects nothing once no repo is rooted there. `README.md`, `.prototools` and `.protolock` stay in place — Task 8 replaces `.prototools`, and the other two are left for now so a rollback has something to read.
 
 - [ ] **Step 3: Assert no repo is rooted at the store**
 
@@ -492,11 +379,7 @@ top=$( cd "$STORE" && git rev-parse --show-toplevel 2>/dev/null || true )
 test -z "$top" || { echo "FAIL: $STORE is inside the repo at $top"; exit 1; }
 ```
 
-`git rev-parse --show-toplevel` walks *upward*, so it answers "is the store
-inside any repo", not "is there a repo here" — which is the question that
-matters, and the reason Step 2 refuses when an ancestor repo exists. Its output
-is captured rather than discarded: the old form suppressed stderr but let the
-path print, so a failure announced itself as a bare directory name.
+`git rev-parse --show-toplevel` walks *upward*, so it answers "is the store inside any repo", not "is there a repo here" — which is the question that matters, and the reason Step 2 refuses when an ancestor repo exists. Its output is captured rather than discarded: the old form suppressed stderr but let the path print, so a failure announced itself as a bare directory name.
 
 ---
 
@@ -544,11 +427,7 @@ telemetry = false
 EOF
 ```
 
-Nine pins, down from eleven. `openjdk` and `zig` are gone with the
-`[plugins.tools]` block that existed only for them — both have
-`installed_versions: []`, and `openjdk` is a dormant conflict with the
-`JAVA_HOME` that `configs/fish/conf.d/android.fish` sets for exactly that
-reason.
+Nine pins, down from eleven. `openjdk` and `zig` are gone with the `[plugins.tools]` block that existed only for them — both have `installed_versions: []`, and `openjdk` is a dormant conflict with the `JAVA_HOME` that `configs/fish/conf.d/android.fish` sets for exactly that reason.
 
 - [ ] **Step 2: Assert proto parses it and the settings survive**
 
@@ -583,11 +462,7 @@ jq -e '.config | has("openjdk") or has("zig") | not' "$SP/parsed.json" >/dev/nul
 	{ echo "FAIL: a dropped pin survives"; exit 1; }
 ```
 
-The shape these assertions address was measured, not assumed: the top-level keys
-of `proto debug config --json` are exactly `config`, `files` and `locks`, the
-pinned tools are **direct keys of `.config`** alongside `plugins`, `settings`
-and `shell` — there is no `.config.versions` — and `unstable-lockfile`
-normalises to `lockfile` in the parsed output.
+The shape these assertions address was measured, not assumed: the top-level keys of `proto debug config --json` are exactly `config`, `files` and `locks`, the pinned tools are **direct keys of `.config`** alongside `plugins`, `settings` and `shell` — there is no `.config.versions` — and `unstable-lockfile` normalises to `lockfile` in the parsed output.
 
 - [ ] **Step 3: Write `configs/proto/README.md`**
 
@@ -671,8 +546,7 @@ cat >> .gitignore <<'EOF'
 EOF
 ```
 
-Every annotation sits on its own line. A trailing comment would become part of
-the pattern and match nothing.
+Every annotation sits on its own line. A trailing comment would become part of the pattern and match nothing.
 
 - [ ] **Step 5: Assert the ignore rule works and the right files stage**
 
@@ -688,8 +562,7 @@ git diff --cached --name-only | grep -qx 'configs/proto/.prototools'
 git diff --cached --name-only | grep -qx 'configs/proto/README.md'
 ```
 
-The `rm -f` here is on a file this step created one line earlier, inside the
-repo. It is not a machine path and the never-delete rule does not reach it.
+The `rm -f` here is on a file this step created one line earlier, inside the repo. It is not a machine path and the never-delete rule does not reach it.
 
 - [ ] **Step 6: Lint and commit**
 
@@ -705,10 +578,7 @@ test -z "$(git status --porcelain)"
 
 ### Task 4: Phase 2 — correct `conf.d/proto.fish`
 
-Two claims in this tracked file are wrong. The NDJSON wart it calls unfixable is
-fixable — on 0.58.2, which is the proto that produced it; 0.62.2 does not emit
-it at all, verified 2026-09-22 with `AI_AGENT` set. And "brew is the install
-source" became unambiguously true only in Task 1.
+Two claims in this tracked file are wrong. The NDJSON wart it calls unfixable is fixable — on 0.58.2, which is the proto that produced it; 0.62.2 does not emit it at all, verified 2026-09-22 with `AI_AGENT` set. And "brew is the install source" became unambiguously true only in Task 1.
 
 **Files:**
 
@@ -742,11 +612,7 @@ else
 fi
 ```
 
-An empty `ndjson-before.txt` does not fail this step and is the likely outcome:
-the wart was proto 0.58.2's, and Task 1 removes that copy. Verified 2026-09-22
-with `AI_AGENT` set against 0.62.2 — no output, exit 0, `PROTO_REPORTER` unset.
-The setting the next step writes is insurance against a machine that runs an
-older proto again, so the step stands either way.
+An empty `ndjson-before.txt` does not fail this step and is the likely outcome: the wart was proto 0.58.2's, and Task 1 removes that copy. Verified 2026-09-22 with `AI_AGENT` set against 0.62.2 — no output, exit 0, `PROTO_REPORTER` unset. The setting the next step writes is insurance against a machine that runs an older proto again, so the step stands either way.
 
 - [ ] **Step 2: Rewrite the file**
 
@@ -793,8 +659,7 @@ test ! -s "$SP/startup.err" || { echo "FAIL: fish startup wrote to stderr"; cat 
 /opt/homebrew/bin/fish -c 'type -q node; and echo ok' 2>/dev/null | grep -qx ok
 ```
 
-The startup assertion is the one that matters: it is the whole point of the
-change, and it fails loudly if `set -gx` is ever demoted to a prefix.
+The startup assertion is the one that matters: it is the whole point of the change, and it fails loudly if `set -gx` is ever demoted to a prefix.
 
 - [ ] **Step 4: Commit**
 
@@ -812,17 +677,12 @@ test -z "$(git status --porcelain)"
 
 **Files:**
 
-- Modify: `bin/install` — header comment (lines 30–34), `KNOWN_PATHS` (41),
-  `usage()` (43–47), the merge guard message (98), the plan scalars (239–240),
-  a new `show_file_diff()` and `classify_file()` after `classify_stub()` (376),
-  the classify calls (406–409), `check_slot` calls (424–426), the slot sum
-  (432), and a new `apply_file()` plus its call before `apply_path git` (521).
+- Modify: `bin/install` — header comment (lines 30–34), `KNOWN_PATHS` (41), `usage()` (43–47), the merge guard message (98), the plan scalars (239–240), a new `show_file_diff()` and `classify_file()` after `classify_stub()` (376), the classify calls (406–409), `check_slot` calls (424–426), the slot sum (432), and a new `apply_file()` plus its call before `apply_path git` (521).
 
 **Interfaces:**
 
 - Consumes: `configs/proto/.prototools` from Task 3.
-- Produces: `bin/install --resolve proto=<overwrite|refuse>`, and a link at
-  `$STORE/.prototools`. Task 7's suite exercises it; Task 8 runs it for real.
+- Produces: `bin/install --resolve proto=<overwrite|refuse>`, and a link at `$STORE/.prototools`. Task 7's suite exercises it; Task 8 runs it for real.
 
 - [ ] **Step 1: Widen the path vocabulary**
 
@@ -834,8 +694,7 @@ KNOWN_PATHS='fish git proto'
 
 Replace every `<fish|git>` with `<fish|git|proto>` — lines 33, 34, 45 and 46.
 
-The file's own header contract at lines 4–10 lists the paths it manages and must
-gain proto, or the script documents the opposite of what it does:
+The file's own header contract at lines 4–10 lists the paths it manages and must gain proto, or the script documents the opposite of what it does:
 
 ```sh
 #   $XDG_CONFIG_HOME/fish                    -> <repo>/configs/fish  (symlink)
@@ -844,10 +703,7 @@ gain proto, or the script documents the opposite of what it does:
 #   $XDG_CONFIG_HOME/git                     -> <repo>/configs/git   (symlink, last)
 ```
 
-with a sentence below it noting that proto is the one path not under
-`$XDG_CONFIG_HOME`, because proto never reads that variable, and the one whose
-link is on a file rather than a directory, because the directory is a 2.3 GB
-store.
+with a sentence below it noting that proto is the one path not under `$XDG_CONFIG_HOME`, because proto never reads that variable, and the one whose link is on a file rather than a directory, because the directory is a 2.3 GB store.
 
 Then line 98's message becomes:
 
@@ -876,9 +732,7 @@ proto_path="$proto_store/.prototools"
 proto_target="$record/proto/.prototools"
 ```
 
-The run's header block — the one that prints `repo:`, `record:`, `config home:`
-and `backups:` — gains a line, so an unattended log records which of the three
-candidate stores was chosen rather than leaving it to be inferred:
+The run's header block — the one that prints `repo:`, `record:`, `config home:` and `backups:` — gains a line, so an unattended log records which of the three candidate stores was chosen rather than leaving it to be inferred:
 
 ```sh
 echo "  proto store: $proto_store"
@@ -1078,9 +932,7 @@ and its call, placed immediately before `apply_path git "$plan_git"`:
 apply_file proto "$plan_proto" "$proto_path"
 ```
 
-proto goes before git for the same reason everything does: git's backup-move and
-link creation must stay adjacent, because in that window there is no global git
-config at all.
+proto goes before git for the same reason everything does: git's backup-move and link creation must stay adjacent, because in that window there is no global git config at all.
 
 - [ ] **Step 6: Assert the script still parses**
 
@@ -1098,17 +950,9 @@ bin/install --resolve nope=overwrite 2>&1 | grep -q "unknown path 'nope'" ||
 	{ echo "FAIL: an unknown path is accepted"; exit 1; }
 ```
 
-All three invocations exit 2, but each line is a *pipeline* whose status is
-grep's, so `set -e` is safe here and needs no accommodation. **Never append
-`|| true` to an assertion** — it makes the assertion pass unconditionally, which
-is worse than not having written it.
+All three invocations exit 2, but each line is a *pipeline* whose status is grep's, so `set -e` is safe here and needs no accommodation. **Never append `|| true` to an assertion** — it makes the assertion pass unconditionally, which is worse than not having written it.
 
-These three are safe to run against the real machine: `usage()` exits inside the
-argument loop, before the script resolves `$repo`, before it probes for lefthook
-and before it creates its temporaries, so nothing is read and nothing is
-written. Note that `sh -n` is a syntax check only — the first execution of
-`classify_file`, `show_file_diff` and `apply_file` is Task 7, which is why that
-task is the gate.
+These three are safe to run against the real machine: `usage()` exits inside the argument loop, before the script resolves `$repo`, before it probes for lefthook and before it creates its temporaries, so nothing is read and nothing is written. Note that `sh -n` is a syntax check only — the first execution of `classify_file`, `show_file_diff` and `apply_file` is Task 7, which is why that task is the gate.
 
 - [ ] **Step 7: Commit**
 
@@ -1126,16 +970,12 @@ test -z "$(git status --porcelain)"
 
 **Files:**
 
-- Modify: `bin/doctor` — the temp files and trap (19–20), a
-  `check_file_link()` beside `check_link()` (30–44), the store resolution and
-  the proto call after line 46, and a new proto block before the review queue
-  (160).
+- Modify: `bin/doctor` — the temp files and trap (19–20), a `check_file_link()` beside `check_link()` (30–44), the store resolution and the proto call after line 46, and a new proto block before the review queue (160).
 
 **Interfaces:**
 
 - Consumes: `configs/proto/.prototools`, and `bin/install`'s link.
-- Produces: a doctor that exits non-zero on a severed proto link or an
-  uninstalled pin.
+- Produces: a doctor that exits non-zero on a severed proto link or an uninstalled pin.
 
 - [ ] **Step 1: Add a fourth temp file**
 
@@ -1193,8 +1033,7 @@ else
 fi
 ```
 
-and declare `proto_link_ok=0` beside `fish_link_ok=0` at line 17 — there only,
-not here as well, or the initialisation is dead on arrival.
+and declare `proto_link_ok=0` beside `fish_link_ok=0` at line 17 — there only, not here as well, or the initialisation is dead on arrival.
 
 - [ ] **Step 4: Add the pin check, before the review queue**
 
@@ -1287,10 +1126,7 @@ if [ -e "$proto_store/bin/proto" ]; then
 fi
 ```
 
-Note there is deliberately **no unclassified-entries report**. The fish version
-of that arithmetic closes only because fisher keeps a file-level manifest; proto
-keeps none, so the same mechanism would print one advisory line per store entry
-— over 55,000 of them.
+Note there is deliberately **no unclassified-entries report**. The fish version of that arithmetic closes only because fisher keeps a file-level manifest; proto keeps none, so the same mechanism would print one advisory line per store entry — over 55,000 of them.
 
 - [ ] **Step 5: Assert the script parses and the check is right**
 
@@ -1300,8 +1136,7 @@ cd "$CLONE"
 sh -n bin/doctor
 ```
 
-The behavioural assertions live in Task 7, which can build the fixtures this
-needs.
+The behavioural assertions live in Task 7, which can build the fixtures this needs.
 
 - [ ] **Step 6: Commit**
 
@@ -1548,8 +1383,7 @@ chmod +x "$SP/tests-proto.sh"
 REPO="$CLONE" SB="$SP/sandbox" sh "$SP/tests-proto.sh"
 ```
 
-Expected: `all proto assertions passed`, exit 0. Every failure names the
-assertion. **Do not proceed past a non-zero exit.**
+Expected: `all proto assertions passed`, exit 0. Every failure names the assertion. **Do not proceed past a non-zero exit.**
 
 - [ ] **Step 3: Confirm the suite touched nothing real**
 
@@ -1667,17 +1501,9 @@ jq -e '.config | has("openjdk") or has("zig") | not' "$SP/live.json" >/dev/null 
 	{ echo "FAIL: proto still sees a dropped pin — the old record is being read"; exit 1; }
 ```
 
-The telemetry assertion is the sharp one. A severed link is silent on read and
-reverts proto to built-in defaults, in which telemetry is **true** — so it alone
-distinguishes "reading our record" from "reading nothing". The `openjdk`/`zig`
-assertion is its complement: it distinguishes "reading our record" from "reading
-the *old* record", which the telemetry check alone would pass, since the old one
-disabled telemetry too.
+The telemetry assertion is the sharp one. A severed link is silent on read and reverts proto to built-in defaults, in which telemetry is **true** — so it alone distinguishes "reading our record" from "reading nothing". The `openjdk`/`zig` assertion is its complement: it distinguishes "reading our record" from "reading the *old* record", which the telemetry check alone would pass, since the old one disabled telemetry too.
 
-Run from `$HOME` rather than `$CLONE`, and without `--config-mode`: the global
-record loads from any directory, and this asserts the everyday path rather than
-a special one. The shape addressed here was measured — the top-level keys are
-`config`, `files` and `locks`, and the pins are direct keys of `.config`.
+Run from `$HOME` rather than `$CLONE`, and without `--config-mode`: the global record loads from any directory, and this asserts the everyday path rather than a special one. The shape addressed here was measured — the top-level keys are `config`, `files` and `locks`, and the pins are direct keys of `.config`.
 
 - [ ] **Step 5: `bin/doctor` exits 0**
 
@@ -1687,10 +1513,7 @@ cd "$CLONE"
 ./bin/doctor
 ```
 
-Expected: a `✓ link` line for `$STORE/.prototools`, and
-`✓ proto      all 8 pinned versions are installed`. Eight, not nine — the
-record carries nine pins and `npm = "bundled"` is not a concrete version, so it
-is skipped rather than looked up.
+Expected: a `✓ link` line for `$STORE/.prototools`, and `✓ proto      all 8 pinned versions are installed`. Eight, not nine — the record carries nine pins and `npm = "bundled"` is not a concrete version, so it is skipped rather than looked up.
 
 - [ ] **Step 6: Assert a `proto pin` lands in the repo**
 
@@ -1727,14 +1550,9 @@ test -z "$(git status --porcelain)"
 test "$(git rev-parse HEAD)" = "$head_before"
 ```
 
-This is the design's load-bearing claim, asserted end to end on the real
-machine: a proto write lands **in the repo**, **through the link**, **in place**
-— same inode — and leaves the link intact. The inode check is what distinguishes
-an in-place rewrite from a temp-file-plus-rename, which would have replaced the
-symlink with a regular file and quietly forked the record.
+This is the design's load-bearing claim, asserted end to end on the real machine: a proto write lands **in the repo**, **through the link**, **in place** — same inode — and leaves the link intact. The inode check is what distinguishes an in-place rewrite from a temp-file-plus-rename, which would have replaced the symlink with a regular file and quietly forked the record.
 
-`proto pin` reaches the network for plugin metadata, so this step needs
-connectivity. It pins a version it does not install; `git restore` undoes it.
+`proto pin` reaches the network for plugin metadata, so this step needs connectivity. It pins a version it does not install; `git restore` undoes it.
 
 ---
 
@@ -1760,16 +1578,11 @@ Make these edits:
    ~/.proto/.prototools  →  <this clone>/configs/proto/.prototools
    ```
 
-   with a sentence saying proto is the one tool whose path is not under
-   `~/.config`, because proto never reads `XDG_CONFIG_HOME`, and the one whose
-   link is on a file rather than a directory, because the 2.3 GB store is
-   the directory.
+   with a sentence saying proto is the one tool whose path is not under `~/.config`, because proto never reads `XDG_CONFIG_HOME`, and the one whose link is on a file rather than a directory, because the 2.3 GB store is the directory.
 
-2. "What is here" gains a **configs/proto** bullet: the global record, nine
-   pins, and that the store stays outside the repo.
+2. "What is here" gains a **configs/proto** bullet: the global record, nine pins, and that the store stays outside the repo.
 
-3. "A fresh machine" gains `proto` to the `brew install` line, and after
-   `./bin/install`, the restore step:
+3. "A fresh machine" gains `proto` to the `brew install` line, and after `./bin/install`, the restore step:
 
    ```sh
    proto install --config-mode global
@@ -1777,21 +1590,13 @@ Make these edits:
 
    with a note that the mode is not optional.
 
-4. "Per-machine settings" gains a **proto** bullet: per-project pins go in that
-   project's own `./.prototools`; the record here is the global fallback.
+4. "Per-machine settings" gains a **proto** bullet: per-project pins go in that project's own `./.prototools`; the record here is the global fallback.
 
-5. "The hazard of a linked directory" gains a paragraph: proto's link is on a
-   file, so no `rm -rf` can empty a directory through it — but a *severed* link
-   is silent, and proto falls back to built-in defaults with telemetry back on.
-   That is what `bin/doctor` catches.
+5. "The hazard of a linked directory" gains a paragraph: proto's link is on a file, so no `rm -rf` can empty a directory through it — but a *severed* link is silent, and proto falls back to built-in defaults with telemetry back on. That is what `bin/doctor` catches.
 
 6. The `--resolve <fish|git>` literal becomes `--resolve <fish|git|proto>`.
 
-7. The path-naming paragraph — "Each path is named by the tool that owns it —
-   `fish`, `git` — on the command line, under `~/.config` and in the backup
-   directory alike" — becomes false for proto and must say so: `proto` names the
-   path on the command line and in the backup directory, but the path it stands
-   for is `$PROTO_HOME/.prototools`, not something under `~/.config`.
+7. The path-naming paragraph — "Each path is named by the tool that owns it — `fish`, `git` — on the command line, under `~/.config` and in the backup directory alike" — becomes false for proto and must say so: `proto` names the path on the command line and in the backup directory, but the path it stands for is `$PROTO_HOME/.prototools`, not something under `~/.config`.
 
 - [ ] **Step 2: Assert the README no longer contradicts the scripts**
 
@@ -1806,10 +1611,7 @@ markdownlint-cli2 README.md
 
 - [ ] **Step 3: The five edits to the 2026-08-21 design**
 
-1. **"Deliberately out of scope"** — the bullet reading "`~/.claude` and
-   `~/.proto` keep their own repos at their real paths" becomes "`~/.claude`
-   keeps its own repo at its real path", with a following sentence naming the
-   2026-09-21 spec as where proto went and why.
+1. **"Deliberately out of scope"** — the bullet reading "`~/.claude` and `~/.proto` keep their own repos at their real paths" becomes "`~/.claude` keeps its own repo at its real path", with a following sentence naming the 2026-09-21 spec as where proto went and why.
 2. **"Per-tool activation"** — add the proto row:
 
    ```text
@@ -1817,14 +1619,9 @@ markdownlint-cli2 README.md
    ```
 
    and extend the preamble's measured-against list with proto 0.62.2.
-3. **"Destruction accounting"** — one line: a severed proto link is silent and
-   reverts proto to built-in defaults; the store is not under the repo, so no
-   recursive removal inside it can reach the toolchains.
-4. **"Dropped: opencode, gh and micro"** — one sentence in the **gh** paragraph
-   noting the file link it measured viable is the mechanism proto now uses, so
-   gh's disqualification rests on payload size alone.
-5. **The `Status` line** stays `executed 2026-08-23`; add an
-   **Amended-by** line naming the 2026-09-21 spec.
+3. **"Destruction accounting"** — one line: a severed proto link is silent and reverts proto to built-in defaults; the store is not under the repo, so no recursive removal inside it can reach the toolchains.
+4. **"Dropped: opencode, gh and micro"** — one sentence in the **gh** paragraph noting the file link it measured viable is the mechanism proto now uses, so gh's disqualification rests on payload size alone.
+5. **The `Status` line** stays `executed 2026-08-23`; add an **Amended-by** line naming the 2026-09-21 spec.
 
 - [ ] **Step 4: Assert the reversal is recorded, not just contradicted**
 
@@ -1869,8 +1666,7 @@ done
 test "$c" = success
 ```
 
-The full 40-character SHA is required: `--commit` with a short SHA silently
-returns an empty list.
+The full 40-character SHA is required: `--commit` with a short SHA silently returns an empty list.
 
 ---
 
@@ -1948,8 +1744,7 @@ gh repo archive LRNZ09/dotproto --yes
 gh repo view LRNZ09/dotproto --json isArchived --jq '.isArchived' | grep -qx true
 ```
 
-Archiving is reversible and keeps both the URL and the history. Deletion is
-neither, and this plan never deletes a repository.
+Archiving is reversible and keeps both the URL and the history. Deletion is neither, and this plan never deletes a repository.
 
 - [ ] **Step 4: Final state assertions**
 
@@ -1978,20 +1773,13 @@ grep -q '^## What breaks in sancus' "$S" ||
 sed -n '/^## What breaks in sancus/,/^## /p' "$S" | sed '$d'
 ```
 
-The follow-up belongs in the **committed spec**, not in the state file. The
-state file is machine-local, uncommitted, described by this plan as "never
-committed", and sits beside timestamped backup directories a reader is likely to
-delete — so a note written only there is a note that disappears. This step's job
-is to prove the durable record still carries it and to put it in front of
-whoever ran the migration.
+The follow-up belongs in the **committed spec**, not in the state file. The state file is machine-local, uncommitted, described by this plan as "never committed", and sits beside timestamped backup directories a reader is likely to delete — so a note written only there is a note that disappears. This step's job is to prove the durable record still carries it and to put it in front of whoever ran the migration.
 
 ---
 
 ## If it goes wrong: rollback
 
-Every step is reversible by moving something back. Each block below guards its
-own variables: an empty `$BK` or `$STORE` would turn these into commands aimed
-at `/`.
+Every step is reversible by moving something back. Each block below guards its own variables: an empty `$BK` or `$STORE` would turn these into commands aimed at `/`.
 
 ```sh
 set -eu
@@ -2015,30 +1803,18 @@ test -f "$BK/proto-self-install/proto" && mv "$BK/proto-self-install/proto" "$ST
 test -d "$BK/proto-self-install/tools-proto" && mv "$BK/proto-self-install/tools-proto" "$STORE/tools/proto"
 ```
 
-proto reads a regular file exactly as it reads the link, so the machine is whole
-the moment the file is back. The `rm -f` is on a symlink this plan created, and
-is guarded by the `-L` test above; removing a link never touches its target.
+proto reads a regular file exactly as it reads the link, so the machine is whole the moment the file is back. The `rm -f` is on a symlink this plan created, and is guarded by the `-L` test above; removing a link never touches its target.
 
-`gh repo unarchive LRNZ09/dotproto` restores the repository to writable. The
-pointer commit stays in history and can be reverted.
+`gh repo unarchive LRNZ09/dotproto` restores the repository to writable. The pointer commit stays in history and can be reverted.
 
 The dotconfigs commits are ordinary commits on `main`, so `git revert` each.
 
-**Do not `git reset --hard` after Task 8.** Once the link is live,
-`configs/proto/.prototools` is not merely a repo file — it is the file proto
-writes through, so a hard reset silently discards every pin recorded since the
-last commit, on the machine as well as in the tree. If a reset is unavoidable,
-copy the file out first. And never run it with an unset variable:
-`git reset --hard $BASELINE_HEAD` with `BASELINE_HEAD` empty resets to `HEAD`
-and throws away the working tree and index instead of doing nothing.
+**Do not `git reset --hard` after Task 8.** Once the link is live, `configs/proto/.prototools` is not merely a repo file — it is the file proto writes through, so a hard reset silently discards every pin recorded since the last commit, on the machine as well as in the tree. If a reset is unavoidable, copy the file out first. And never run it with an unset variable: `git reset --hard $BASELINE_HEAD` with `BASELINE_HEAD` empty resets to `HEAD` and throws away the working tree and index instead of doing nothing.
 
 ## What this plan does not do
 
 - **It does not move the store.** No task runs `mv` on `~/.proto`.
-- **It does not clean the store.** Roughly 400 MB of `tools/` is versions
-  nothing pins. `proto clean` is a separate decision.
-- **It does not touch sancus.** Eight prose lines there go stale; Task 10 Step 5
-  records them.
+- **It does not clean the store.** Roughly 400 MB of `tools/` is versions nothing pins. `proto clean` is a separate decision.
+- **It does not touch sancus.** Eight prose lines there go stale; Task 10 Step 5 records them.
 - **It does not track `.protolock`.**
-- **It does not resolve whether proto should own `rust`** while `rustup` is also
-  installed and `conf.d/rustup.fish` sources its environment.
+- **It does not resolve whether proto should own `rust`** while `rustup` is also installed and `conf.d/rustup.fish` sources its environment.
