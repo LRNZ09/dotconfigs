@@ -1,15 +1,15 @@
 assert_lefthook_installed: true
-# gitleaks runs as a script in pre-push, from .lefthook/pre-push/gitleaks.sh,
-# rather than as a command. Measured on 2.1.14: lefthook skips a command whose
-# own file list is empty — a push of a branch other than HEAD, for one — and a
-# skipped scan passes everything. Scripts always run, and a script with
-# use_stdin gets all of git's ref lines.
 pre-commit:
   commands:
     gitleaks:
       run: |
         command -v gitleaks >/dev/null || { echo "✖ gitleaks not installed — brew install gitleaks"; exit 1; }
         gitleaks git --staged --no-banner --redact -v --config .gitleaks.toml
+    markdownlint:
+      glob: "*.md"
+      run: |
+        command -v markdownlint-cli2 >/dev/null || { echo "✖ markdownlint-cli2 not installed — brew install markdownlint-cli2"; exit 1; }
+        markdownlint-cli2 {staged_files}
 pre-push:
   scripts:
     gitleaks.sh:
