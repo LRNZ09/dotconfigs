@@ -1,7 +1,6 @@
 # Install
 
-On a fresh Mac, in order. Every step is idempotent except the links, which
-never clobber but can refuse or land inside a directory — see "Traps".
+On a fresh Mac, in order. Every step is idempotent except the links, which never clobber but can refuse or land inside a directory — see "Traps".
 
 1. The prerequisites, and the clone:
 
@@ -11,23 +10,14 @@ never clobber but can refuse or land inside a directory — see "Traps".
    cd ~/Developer/LRNZ09/dotconfigs
    ```
 
-   `bats-core` is what `bin/doctor` runs on; `jq` is what it reads proto's
-   manifests with. Both are in the [brewfile][brewfile] too, so a machine built
-   from that already has them.
+   `bats-core` is what `bin/doctor` runs on; `jq` is what it reads proto's manifests with. Both are in the [brewfile][brewfile] too, so a machine built from that already has them.
 
-2. The clone's own settings. Git carries neither, so each clone needs them
-   once. Run them from the repo root, where step 1 left you:
+2. The clone's own settings. Git carries neither, so each clone needs them once. Run them from the repo root, where step 1 left you:
 
-   - `chmod 700 .` — step 3 links `~/.config/git` and `~/.config/fish` into
-     this directory, and a link is only as private as what it points to.
-     `~/.config` is 700, but git doesn't record directory modes, so a fresh
-     clone is 755 and anyone on the machine could read that config here.
-   - `lefthook install` — so gitleaks scans each commit and each push here,
-     not only in CI once the push is public.
+   - `chmod 700 .` — step 3 links `~/.config/git` and `~/.config/fish` into this directory, and a link is only as private as what it points to. `~/.config` is 700, but git doesn't record directory modes, so a fresh clone is 755 and anyone on the machine could read that config here.
+   - `lefthook install` — so gitleaks scans each commit and each push here, not only in CI once the push is public.
 
-3. The four links and the ghostty include. `git` goes last on purpose: from
-   the moment anything displaces `~/.config/git` until the link lands there is
-   no global git config at all, so that window is kept to one command.
+3. The four links and the ghostty include. `git` goes last on purpose: from the moment anything displaces `~/.config/git` until the link lands there is no global git config at all, so that window is kept to one command.
 
    ```sh
    mkdir -p ~/.config ~/.config/ghostty ~/.proto ~/.agents
@@ -45,34 +35,18 @@ never clobber but can refuse or land inside a directory — see "Traps".
    proto install --config-mode global
    ```
 
-5. fisher, and every plugin in `fish_plugins`. A fresh clone has the record and
-   no fisher at all — fisher's own two files are among the ignored ones — so
-   fisher is sourced once from the network and then reads the record. The
-   record's first line is `jorgebucaran/fisher`, so the same command makes
-   fisher itself permanent:
+5. fisher, and every plugin in `fish_plugins`. A fresh clone has the record and no fisher at all — fisher's own two files are among the ignored ones — so fisher is sourced once from the network and then reads the record. The record's first line is `jorgebucaran/fisher`, so the same command makes fisher itself permanent:
 
    ```fish
    curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
    fisher update
    ```
 
-   `fisher update` with no arguments is the command that reads
-   `fish_plugins`: it installs what the file lists and this machine lacks,
-   removes what it no longer lists, and moves the rest to the newest release
-   its pin allows. It is also how a machine catches up after a pull changes the
-   record.
+   `fisher update` with no arguments is the command that reads `fish_plugins`: it installs what the file lists and this machine lacks, removes what it no longer lists, and moves the rest to the newest release its pin allows. It is also how a machine catches up after a pull changes the record.
 
-   To add a plugin, append it to `fish_plugins`, run `fisher update`, and
-   commit the file. `fisher install <plugin>` would also work, but it rewrites
-   `fish_plugins` from fisher's list of what is installed. Any declared plugin
-   fisher knows under another name loses its pin — `jhillyerd/plugin-git@v0.4`
-   had been installed unpinned, so an install would have committed it as bare
-   `jhillyerd/plugin-git`.
+   To add a plugin, append it to `fish_plugins`, run `fisher update`, and commit the file. `fisher install <plugin>` would also work, but it rewrites `fish_plugins` from fisher's list of what is installed. Any declared plugin fisher knows under another name loses its pin — `jhillyerd/plugin-git@v0.4` had been installed unpinned, so an install would have committed it as bare `jhillyerd/plugin-git`.
 
-6. The skills. `npx` is only on `PATH` via step 5's fish, which proto's
-   `conf.d/proto.fish` activates — zsh never gets it from `proto install`
-   alone. Run this in that same fish shell, and after the link: run first,
-   dotagents writes its own default `agents.toml` there.
+6. The skills. `npx` is only on `PATH` via step 5's fish, which proto's `conf.d/proto.fish` activates — zsh never gets it from `proto install` alone. Run this in that same fish shell, and after the link: run first, dotagents writes its own default `agents.toml` there.
 
    ```fish
    npx @sentry/dotagents --user install
@@ -84,31 +58,14 @@ never clobber but can refuse or land inside a directory — see "Traps".
    ./bin/doctor
    ```
 
-   It exits 0 when this machine matches the record, and names whatever does
-   not — so a run of this list that stopped halfway is finished by reading its
-   output. Each assertion, and the reason it exists, is one named test in
-   `bin/doctor.bats`.
+   It exits 0 when this machine matches the record, and names whatever does not — so a run of this list that stopped halfway is finished by reading its output. Each assertion, and the reason it exists, is one named test in `bin/doctor.bats`.
 
 ## Traps
 
-- `--config-mode global` is not optional. A bare `proto install` defaults to
-  `upwards` mode, never loads the global record at all, and reports "nothing to
-  install" while exiting 0.
-- fish creates `~/.config/fish` on its first run, so on a machine that has
-  started fish once, there is a directory at the path, and `ln -s` quietly
-  puts the link inside it rather than refusing. Move it aside rather than
-  deleting it first:
-  `mv ~/.config/fish ~/config-fish.bak`. The old directory may hold
-  `fish_variables`, which is every `set -U` value this machine had.
-- On a machine where dotagents already ran, `~/.agents/agents.toml` is a
-  regular file and `ln -s` refuses too. Move it aside the same way:
-  `mv ~/.agents/agents.toml ~/agents.toml.bak`.
-- `~/.config/git` and `~/.config/fish` are links **into this repo**, so
-  `rm -rf ~/.config/fish/` — with the trailing slash — follows the link and
-  empties `configs/fish/` here. See "The hazard of a linked directory" in the
-  [README](README.md).
-- There used to be a 714-line `bin/install` doing all of the above. It was
-  built for a provisioner that no longer exists; step 3 less its agents link,
-  plus step 2, is what it did.
+- `--config-mode global` is not optional. A bare `proto install` defaults to `upwards` mode, never loads the global record at all, and reports "nothing to install" while exiting 0.
+- fish creates `~/.config/fish` on its first run, so on a machine that has started fish once, there is a directory at the path, and `ln -s` quietly puts the link inside it rather than refusing. Move it aside rather than deleting it first: `mv ~/.config/fish ~/config-fish.bak`. The old directory may hold `fish_variables`, which is every `set -U` value this machine had.
+- On a machine where dotagents already ran, `~/.agents/agents.toml` is a regular file and `ln -s` refuses too. Move it aside the same way: `mv ~/.agents/agents.toml ~/agents.toml.bak`.
+- `~/.config/git` and `~/.config/fish` are links **into this repo**, so `rm -rf ~/.config/fish/` — with the trailing slash — follows the link and empties `configs/fish/` here. See "The hazard of a linked directory" in the [README](README.md).
+- There used to be a 714-line `bin/install` doing all of the above. It was built for a provisioner that no longer exists; step 3 less its agents link, plus step 2, is what it did.
 
 [brewfile]: https://github.com/LRNZ09/brewfile
