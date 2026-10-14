@@ -4,7 +4,7 @@
 # modification. agents.lock and skills/ stay in ~/.agents — see README.md.
 
 version = 1
-agents = ["claude", "vscode", "opencode"]
+agents = ["claude", "opencode", "pi", "vscode"]
 
 # Supply-chain gate: unpinned sources re-resolve to latest on every install, so
 # require commits to age 7 days first. My own repo skips the gate.
