@@ -1,6 +1,6 @@
-// Prose in this repo is never hard-wrapped. A hard tab in prose is an error.
-// One exemption, for code blocks, which are quoted verbatim. Everything else
-// stays enforced.
+// Prose in this repo is never hard-wrapped, so MD013 (line length) is disabled.
+// Hard tabs in prose are still an error (MD010), but code blocks are exempted.
+// Everything else stays enforced.
 {
   "MD013": false,
   "MD010": {
