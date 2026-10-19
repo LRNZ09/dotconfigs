@@ -86,9 +86,15 @@
 	binary = true
 
 # Credentials and host rewrites
+# Every git (Apple's /usr/bin/git and Homebrew's) runs the same Apple-signed
+# keychain helper. Each store resets the item's keychain partition list to the
+# writing binary, so two helpers taking turns re-prompt forever, and Homebrew's
+# ad-hoc-signed copy changes identity on every upgrade. The empty `helper`
+# clears the `osxkeychain` that Apple git adds from its own system config.
 [credential]
+	helper =
 	helper = cache --timeout 21600	# six hours
-	helper = osxkeychain
+	helper = /Library/Developer/CommandLineTools/usr/libexec/git-core/git-credential-osxkeychain
 	helper = oauth
 	# Must stay last: stored credentials are checked before a new browser login.
 
