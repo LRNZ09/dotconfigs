@@ -13,6 +13,7 @@ minimum_release_age_exclude = ["LRNZ09/*"]
 
 [trust]
 github_orgs = ["getsentry", "LRNZ09", "mattpocock", "anthropics"]
+github_repos = ["vercel-labs/skills"]
 
 [[skills]]
 name = "dotagents"
@@ -47,3 +48,7 @@ source = "anthropics/skills"
 [[skills]]
 name = "*"
 source = "LRNZ09/skills"
+
+[[skills]]
+name = "find-skills"         # search and vet skills.sh skills before adding them
+source = "vercel-labs/skills"
