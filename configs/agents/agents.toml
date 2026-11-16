@@ -18,7 +18,7 @@ github_repos = ["vercel-labs/skills"]
 [[skills]]
 name = "dotagents"
 source = "getsentry/dotagents"
-ref = "3.1.0"
+ref = "3.4.0"
 
 # getsentry/skills and anthropics/skills are an include list, one block per
 # skill: nothing new arrives from upstream until it's listed here, and every
