@@ -38,6 +38,22 @@ name = "secret-serialization" # secrets leaking through repr, logs and spans
 source = "getsentry/skills"
 
 [[skills]]
+name = "commit"             # commit messages with issue references, my most-used skill
+source = "getsentry/skills"
+
+[[skills]]
+name = "create-branch"      # branch names in repos without their own convention
+source = "getsentry/skills"
+
+[[skills]]
+name = "pr-writer"          # GitHub PR titles and bodies in personal repos
+source = "getsentry/skills"
+
+[[skills]]
+name = "skill-scanner"      # vets a skill for injection and secrets before install
+source = "getsentry/skills"
+
+[[skills]]
 name = "frontend-design"     # the active copy; the Claude Code plugin is disabled
 source = "anthropics/skills"
 
