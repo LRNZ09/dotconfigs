@@ -54,11 +54,7 @@ name = "skill-scanner"      # vets a skill for injection and secrets before inst
 source = "getsentry/skills"
 
 [[skills]]
-name = "frontend-design"     # the active copy; the Claude Code plugin is disabled
-source = "anthropics/skills"
-
-[[skills]]
-name = "slack-gif-creator"   # animated GIFs sized for Slack
+name = "frontend-design"     # the only copy; the Claude Code plugin is uninstalled
 source = "anthropics/skills"
 
 [[skills]]
@@ -68,3 +64,41 @@ source = "LRNZ09/skills"
 [[skills]]
 name = "find-skills"         # search and vet skills.sh skills before adding them
 source = "vercel-labs/skills"
+
+# Matt Pocock's skills, straight from upstream: everything in engineering/,
+# plus the productivity/ skills named below. in-progress/ and misc/ stay out.
+# dotagents allows one wildcard per source, so productivity/ is listed by
+# name, and a name Matt renames or deletes stops install: check these first.
+[[skills]]
+name = "*"
+source = "mattpocock/skills"
+path = "skills/engineering"
+exclude = ["pr"]             # pr-writer owns PR bodies; the two contradict each other
+
+[[skills]]
+name = "grill-me"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "grilling"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "handoff"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "teach"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "to-questionnaire"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "wait-what"
+source = "mattpocock/skills"
+
+[[skills]]
+name = "writing-for-agents"
+source = "mattpocock/skills"

@@ -21,6 +21,6 @@ Everything else in `~/.agents` stays there and is not in this repo:
 
 ## Guard rails
 
-`[trust]` limits sources to four GitHub orgs and one repo, `vercel-labs/skills`, trusted alone for `find-skills` rather than the whole org. `minimum_release_age` holds every source's commits back seven days, except `LRNZ09/*`. getsentry/skills and anthropics/skills are include lists, so a skill added upstream arrives only once it has its own block. The `dotagents` skill is pinned at 3.1.0, the same version as the CLI, which runs unpinned through `npx`.
+`[trust]` limits sources to four GitHub orgs and one repo, `vercel-labs/skills`, trusted alone for `find-skills` rather than the whole org. `minimum_release_age` holds every source's commits back seven days, except `LRNZ09/*`. getsentry/skills and anthropics/skills are include lists, so a skill added upstream arrives only once it has its own block. mattpocock/skills is a wildcard over `skills/engineering` plus named `productivity/` blocks, so a new engineering skill arrives on its own after the seven days. The `dotagents` skill is pinned at 3.1.0, the same version as the CLI, which runs unpinned through `npx`.
 
 The in-place write was measured on 3.1.0. dotagents already writes other files by temp-file-and-rename, so a later release could replace the link with a regular file; `bin/doctor`'s link test is what would notice.
