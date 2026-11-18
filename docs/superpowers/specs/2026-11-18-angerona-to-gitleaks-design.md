@@ -53,6 +53,7 @@ The guard keeps work terms (employer, clients, codenames) out of public repos. T
 - `commit.verbose` is on, so an editor commit's message file holds `#` comments and the diff below the scissors line, and `gitleaks dir` scans them: a commit that removes a term or a secret, or a branch named after a term, is refused. `git commit -m` works around it.
 - The built-in rules add false positives, in MCP calls too; `generic-api-key` is the noisy one. If it gets in the way, turn that rule off in `default.toml`.
 - In a work session every MCP call passes, GitHub included; angerona still checked GitHub calls to other owners there.
+- The push check leaves out only what the pushed-to remote's own tracking refs hold, as dotconfigs' lefthook script does, so a private remote's history never counts as public. A push to a remote that was added but never fetched (a fork, say) scans the whole history, built-in secret rules included, and can be refused for someone else's commit. `git fetch <remote>` first works around it. (Added 2026-11-18, after the final review.)
 
 ## Left to the builder
 

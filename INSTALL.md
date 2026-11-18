@@ -29,7 +29,15 @@ On a fresh Mac, in order. Every step is idempotent except the links, which never
    ln -s "$PWD/configs/git" ~/.config/git
    ```
 
-   From here the git config runs gitleaks as hooks in every repo, with the configs in `~/.config/gitleaks/`, so every commit and push is refused until `default.toml` and `work.toml` are restored there from the password manager (directory 700, files 600). `bats bin/gitleaks-hooks.bats` tests the hooks.
+   From here the git config runs gitleaks as hooks in every repo, with the configs in `~/.config/gitleaks/`, so every commit and push is refused until both are there. `default.toml` turns on gitleaks' built-in secret rules; `work.toml`, the private work terms, comes from the password manager:
+
+   ```sh
+   mkdir -m 700 -p ~/.config/gitleaks
+   printf '[extend]\nuseDefault = true\n' > ~/.config/gitleaks/default.toml
+   chmod 600 ~/.config/gitleaks/default.toml
+   ```
+
+   Then save `work.toml` there from the password manager and `chmod 600` it. `bats bin/gitleaks-hooks.bats` tests the hooks.
 
 4. The toolchains:
 
