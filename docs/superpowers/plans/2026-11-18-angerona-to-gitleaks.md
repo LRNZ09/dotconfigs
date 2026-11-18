@@ -63,10 +63,10 @@ Expected: `2`
 
 - [ ] **Step 3: Hand Lorenzo the conversion, one line each, pasteable into fish**
 
-The jq program builds the backslashes from `\`, so fish's single quotes pass it unchanged. It keeps angerona's list rules: spaces trimmed, blank lines and lines starting with `#` skipped.
+The jq program builds the backslash with `[92] | implode`, so fish's single quotes pass it unchanged (jq reads `\` in a string as a backslash that starts an escape, and `\Q` is not one). It keeps angerona's list rules: spaces trimmed, blank lines and lines starting with `#` skipped.
 
 ```fish
-jq -rnR '"[extend]", "path = \"/Users/lorenzo/.config/gitleaks/default.toml\"", (foreach (inputs | sub("^ +"; "") | sub(" +$"; "") | select(. != "" and (startswith("#") | not))) as $t (0; . + 1; "", "[[rules]]", "id = \"term-\(.)\"", "description = \($t | @json)", "regex = \("(?i)\Q\($t)\E" | @json)"))' ~/.config/angerona/terms.txt > ~/.config/gitleaks/work.toml
+jq -rnR '([92] | implode) as $b | "[extend]", "path = \"/Users/lorenzo/.config/gitleaks/default.toml\"", (foreach (inputs | sub("^ +"; "") | sub(" +$"; "") | select(. != "" and (startswith("#") | not))) as $t (0; . + 1; "", "[[rules]]", "id = \"term-\(.)\"", "description = \($t | @json)", "regex = \("(?i)\($b)Q\($t)\($b)E" | @json)"))' ~/.config/angerona/terms.txt > ~/.config/gitleaks/work.toml
 chmod 600 ~/.config/gitleaks/work.toml
 grep -c '^\[\[rules\]\]' ~/.config/gitleaks/work.toml
 grep -cvE '^ *(#|$)' ~/.config/angerona/terms.txt
