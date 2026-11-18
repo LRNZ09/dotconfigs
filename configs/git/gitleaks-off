@@ -1,0 +1,8 @@
+# Included for repos that may name work terms (see config): switches the
+# work-term guard, gitleaks, off.
+[hook "gitleaks-msg"]
+	enabled = false
+[hook "gitleaks-staged"]
+	enabled = false
+[hook "gitleaks-push"]
+	enabled = false

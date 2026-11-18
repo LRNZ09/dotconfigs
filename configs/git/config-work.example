@@ -3,3 +3,11 @@
 [user]
 	email = you@work.example
 	signingkey = YOUR_GPG_KEY_ID
+
+# Work repos may name work terms: switch the work-term guard, gitleaks, off here.
+[hook "gitleaks-msg"]
+	enabled = false
+[hook "gitleaks-staged"]
+	enabled = false
+[hook "gitleaks-push"]
+	enabled = false

@@ -119,6 +119,34 @@
 	insteadOf = git@github.com:
 	insteadOf = ssh://git@github.com/
 
+# The work-term guard, gitleaks, in every repo: refuses a commit or push that
+# names a term on its private list or holds a secret
+# (~/.config/gitleaks/work.toml, which extends default.toml's built-in secret
+# rules). config-work switches it off under ~/Developer/work, and gitleaks-off
+# in dotclaude. bin/gitleaks-hooks.bats tests these hooks.
+[hook "gitleaks-msg"]
+	event = commit-msg
+	command = /opt/homebrew/bin/gitleaks dir --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml
+
+[hook "gitleaks-staged"]
+	event = pre-commit
+	command = /opt/homebrew/bin/gitleaks git --staged --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml
+
+# Each pushed commit the remote lacks, as .lefthook/pre-push/gitleaks.sh does
+# (its comments say why each part is there). It ends in `:` because git
+# appends "$@" to the command.
+[hook "gitleaks-push"]
+	event = pre-push
+	command = "not=; case $1 in '' | *[[:space:]]* | *[][*?\\\\]*) ;; \
+*) git remote | grep -qxF -- \"$1\" && not=\" --not --remotes=$1\" ;; esac; \
+while read -r _ sha _ _; do \
+case $sha in *[!0]*) ;; *) continue ;; esac; \
+git rev-parse -q --verify \"$sha^{commit}\" >/dev/null || \
+{ echo \"gitleaks-push: $sha is not a commit, and gitleaks scans only commits\" >&2; exit 1; }; \
+/opt/homebrew/bin/gitleaks git --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml \
+--log-opts=\"--no-color --no-ext-diff --no-textconv --root --diff-merges=first-parent $sha$not\" || exit 1; \
+done; :"
+
 # Per-machine identity (signing key, etc.) — see config-local.example
 [include]
 	path = config-local
@@ -126,3 +154,7 @@
 # Conditional includes
 [includeIf "gitdir:~/Developer/work/"]
 	path = config-work
+
+# The private dotclaude may name work terms too.
+[includeIf "gitdir:~/Developer/LRNZ09/dotclaude/"]
+	path = gitleaks-off
