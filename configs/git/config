@@ -133,8 +133,9 @@
 	command = /opt/homebrew/bin/gitleaks git --staged --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml
 
 # Each pushed commit the remote lacks, as .lefthook/pre-push/gitleaks.sh does
-# (its comments say why each part is there). It ends in `:` because git
-# appends "$@" to the command.
+# (its comments say why each part is there), and their messages, which
+# `gitleaks git` never reads: a cherry-pick, am or rebase runs no commit-msg
+# hook. It ends in `:` because git appends "$@" to the command.
 [hook "gitleaks-push"]
 	event = pre-push
 	command = "not=; case $1 in '' | *[[:space:]]* | *[][*?\\\\]*) ;; \
@@ -145,6 +146,8 @@ git rev-parse -q --verify \"$sha^{commit}\" >/dev/null || \
 { echo \"gitleaks-push: $sha is not a commit, and gitleaks scans only commits\" >&2; exit 1; }; \
 /opt/homebrew/bin/gitleaks git --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml \
 --log-opts=\"--no-color --no-ext-diff --no-textconv --root --diff-merges=first-parent $sha$not\" || exit 1; \
+msgs=$(git log --no-show-signature --format=%B $sha$not) || exit 1; \
+printf '%s' \"$msgs\" | /opt/homebrew/bin/gitleaks stdin --no-banner --redact -v --ignore-gitleaks-allow -c ~/.config/gitleaks/work.toml || exit 1; \
 done; :"
 
 # Per-machine identity (signing key, etc.) — see config-local.example

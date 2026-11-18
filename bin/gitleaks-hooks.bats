@@ -90,6 +90,15 @@ commit() {
 	[ "$status" -ne 0 ]
 }
 
+@test "push refuses a commit whose message names a term" {
+	hook gitleaks-push
+	echo x >f
+	git add f
+	git commit -qm "port the Initech fix"
+	run git push -q origin HEAD:main
+	[ "$status" -ne 0 ]
+}
+
 @test "push passes a clean commit" {
 	hook gitleaks-push
 	commit f hello
