@@ -123,6 +123,38 @@ commit() {
 	[ "$status" -ne 0 ]
 }
 
+@test "push refuses a term a textconv driver would hide" {
+	hook gitleaks-push
+	echo '* diff=blank' >.git/info/attributes
+	git config diff.blank.textconv true
+	commit f Initech
+	run git push -q origin HEAD:main
+	[ "$status" -ne 0 ]
+}
+
+@test "push refuses a term in a root commit with log.showRoot off" {
+	hook gitleaks-push
+	git config log.showRoot false
+	git switch -q --orphan other
+	commit f Initech
+	run git push -q origin other
+	[ "$status" -ne 0 ]
+}
+
+@test "push refuses a term only a merge adds" {
+	hook gitleaks-push
+	git switch -q -c side
+	commit s hello
+	git switch -q main
+	commit m hello
+	git merge -q --no-commit side
+	printf 'Initech\n' >f
+	git add f
+	git commit -qm merge
+	run git push -q origin HEAD:main
+	[ "$status" -ne 0 ]
+}
+
 @test "push to a remote named * scans every commit" {
 	commit f Initech
 	git push -q origin main
